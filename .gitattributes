@@ -1,0 +1,29 @@
+# 统一按 LF 存盘与检出：这些 .md / .py 会被拷回 skills 目录直接使用，
+# 保持与源文件字节一致，避免 Windows 下 autocrlf 把工作区改成 CRLF 造成无谓 diff。
+* text=auto eol=lf
+
+*.md    text eol=lf
+*.py    text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+*.ini   text eol=lf
+*.sh    text eol=lf
+
+# 二进制资源，禁止任何换行/文本转换
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.zip   binary
+*.7z    binary
+*.ndfbin binary
+*.tgv   binary
+*.dds   binary
+*.fbx   binary
+*.glb   binary

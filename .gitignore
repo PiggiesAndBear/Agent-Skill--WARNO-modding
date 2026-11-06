@@ -1,0 +1,37 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── 运行产物 / 临时文件 ──
+.workbuddy/tmp/
+tmp/
+temp/
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# 脚本输出的中间结果（按需自行保留，默认不入库）
+out/
+output/
+build/
+dist/
+
+# ── 编辑器 / 系统 ──
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+desktop.ini
+.DS_Store
