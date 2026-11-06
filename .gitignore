@@ -27,6 +27,9 @@ output/
 build/
 dist/
 
+# ── 一次性锚点 / 需求清单（脚本临时产物，不入库）──
+scripts/*_need.txt
+
 # ── 编辑器 / 系统 ──
 .vscode/
 .idea/

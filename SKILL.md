@@ -200,7 +200,9 @@ agent_created: true
 
 - **绝对不要内联执行 Python**（bash 吞反斜杠、缺 `ls`/`head`/`tail`）。写成 `.py` 文件再跑。
 - 查询器优先用 `scripts/recon.py`，别手写一次性脚本。
-- **`mesh_check.py` / `split_shells.py` / `split_wheels.py` / `pose_render.py` / `bake_deploy_fold.py` / `pick_anchor.py` 是 Blender 脚本**，
+- **Blender 脚本共 9 个**：`mesh_check.py` / `split_shells.py` / `split_wheels.py` / `track_uv_axis.py` /
+  `pose_render.py` / `pick_anchor.py` / `bake_deploy_fold.py` / `rail_mesh.py` / `render_ground.py`；
+  其余 11 个是纯 Python，直接 `python xxx.py`。
   要用 `blender -b -P` 跑（不是 python）；参数一律写在 `--` 之后，
   例如 `blender -b -P split_shells.py -- in.fbx out.fbx --spec parts.json`。
   本机 blender 在 **`D:/blender-5.3.0/blender.exe`**（不在 PATH 里）。

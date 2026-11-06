@@ -9,8 +9,7 @@
 | 体量 | 1 个入口 `SKILL.md`（213 行）+ 14 份 `references/`（5,743 行）+ 20 个 `scripts/`（6,559 行），共约 12,515 行 |
 | 知识来源 | WARNO 官方 Mods `base.zip`（4,564 个 `.ndf`）、`WARNO.exe` RTTI 类型表、崩溃转储、**实机验证** |
 | 覆盖 | 只读勘查 / 造单位·弹药·外观 / 自定义网格与可动部件 / 将军模式(AG) / 行为层 / 游戏 UI / 数值语义 / 编译与崩溃分诊 |
-| 仓库 | 本地 `main` 分支，首次提交 `1399787`，**未配置 remote、未推送** |
-| 运行时位置 | `C:\Users\123\.workbuddy\skills\warno-modding\` |
+| 仓库 | Git 仓库，`main` 分支，首次提交 `1399787` |
 
 ---
 
@@ -24,7 +23,7 @@
 - **写编辑器界面**（WinForms / PySide / Qt 的窗口与交互）→ 走 `eugen-ndf-editor-pattern`。
   注意这里最容易混：**改游戏里的 UI**（图标、配色、HUD、AG 面板、兵牌）是本仓库 `70-ui.md` 与 `20-unit-authoring.md §2.5` 的事；**做一个改数据的桌面编辑器**才归 editor-pattern。
 - 别的 Eugen 游戏（Steel Division 2 / Wargame Red Dragon）→ 数据结构不同，不要套用。
-- mod 本体的发布、上传、线上同步 → 由使用者手动完成，本仓库不负责。
+- mod 本体、游戏安装工程与发布流程 → 本仓库只提供数据知识与工具，不含可直接编译的完整 mod 工程。
 
 ---
 
@@ -148,7 +147,7 @@ warno-modding/
 | `rail_mesh.py` | 出管挂架网格：抄骨骼世界矩阵 → 建 4 mm `Chassis` → 三角化 → 导出；仰角不符或骨骼不共姿态直接拒绝 |
 | `render_ground.py` | 验收弹体落位：红=实际、绿=应为，判定挂点与几何中心相距应 < 0.01 m |
 
-> 本机 Blender：`D:/blender-5.3.0/blender.exe`（不在 PATH）。
+> Blender 需自行安装并用可执行文件的绝对路径调用（不在 PATH；当前环境的示例路径记在 `SKILL.md §6`）。
 > 示例：`blender -b -P split_shells.py -- in.fbx out.fbx --spec parts.json`
 > Blender 里**相对输出路径会掉到盘符根**（`out/x.png` → `C:\out\x.png`），自写脚本时须转绝对路径。
 
@@ -225,7 +224,7 @@ warno-modding/
 | AG | `PackIndex` | 不是下标，是按窗口算出来的起点（W1–W4） | `10-army-general.md §1` |
 | AG | `IsHQ` | 存在性标志，不是布尔值 | `10-army-general.md §3` |
 | UI | 解析方式 | 四条链全是**字符串 → MAP 查表**，拼错不报错、只静默变空白/默认色 | `70-ui.md §5` |
-| 环境 | Blender | `D:/blender-5.3.0/blender.exe` | `SKILL.md §6` |
+| 环境 | Blender | `blender -b -P <脚本> -- <参数>`；具体路径见 `SKILL.md §6` | `SKILL.md §6` |
 
 ---
 
@@ -233,9 +232,7 @@ warno-modding/
 
 - **换行统一 LF**：`.gitattributes` 强制 `*.md` / `*.py` 等文本 `eol=lf`。原因：这些文件会被拷回 skills 目录直接使用，Windows 全局 `core.autocrlf=true` 会把工作区改成 CRLF，导致每次同步产生全文件假 diff。常见二进制后缀（`.png` / `.ndfbin` / `.tgv` / `.fbx` …）已标 `binary`。
 - **忽略规则**：`__pycache__/`、`*.pyc`、`.venv/`、`.workbuddy/tmp/`、`*.log`、`*.bak`、`out/` `build/` `dist/`、编辑器与系统杂项。
-- **不自动推送**：本仓库没有 remote。上传由使用者手动完成（沿用既有约定）。
-- **同源两份**：本仓库与 `C:\Users\123\.workbuddy\skills\warno-modding\` 是同一份 Skill 的两个副本。
-  **哪边为主、怎么单向同步尚未约定**（见 §9），改动时务必只改一边再同步，避免两边漂移。
+- **可移植性**：正文里的路径均为示例，不是硬编码依赖；换环境时按 `SKILL.md §6` 的说明调整 Python、Blender 与 Mods 目录位置。
 
 ---
 
@@ -256,17 +253,17 @@ warno-modding/
 
 ---
 
-## 9. 维护待办（本次梳理发现，尚未改动）
+## 9. 一致性核对记录（2026-11-07，已修正）
 
-以下三条是梳理时发现的现状问题，**按约定先列出、等确认后再改**，不静默处理：
+按「发现即列出、确认后再改」的约定，梳理时核对出三处不一致，均已处置：
 
-| # | 位置 | 问题 |
-|---|---|---|
-| 1 | `SKILL.md §6` | 环境说明只列了 6 个 Blender 脚本，实际有 **9 个**，漏 `rail_mesh.py` / `render_ground.py` / `track_uv_axis.py`（三者在 `§5` 索引里已标为 Blender 脚本，本身可用） |
-| 2 | `scripts/t90_need.txt` | 87 字节的一次性锚点清单（T-90，1 行），由 `depiction_anchors.py` 生成，既不在 `SKILL.md §5` 索引，也不在 `.gitignore`，已随首次提交入库 |
-| 3 | 首次提交 `1399787` 的说明 | 写的是「references 共 15 份」，实际 **14 份**；正文与索引均无此误，仅提交说明笔误 |
+| # | 位置 | 原问题 | 处置 |
+|---|---|---|---|
+| 1 | `SKILL.md §6` | 环境说明只列 6 个 Blender 脚本，实际 9 个 | 已补齐 `rail_mesh.py` / `render_ground.py` / `track_uv_axis.py`，并注明其余 11 个为纯 Python |
+| 2 | `scripts/t90_need.txt` | 87 字节的一次性锚点清单（T-90），既不在索引也不在忽略规则，误随首次提交入库 | 用 `git rm --cached` 移出版本库（**磁盘文件保留**）；`.gitignore` 增加 `scripts/*_need.txt` |
+| 3 | 首次提交 `1399787` 说明 | 写「references 共 15 份」，实际 14 份 | 正文与索引均无此误；以新提交说明更正，不改写已有提交 |
 
-另有一项约定待定：**本仓库与 skills 运行时目录以谁为主、如何单向同步**（§7）。
+核对结果：14 份 references 与 `SKILL.md §5` 索引一一对应；20 个脚本与索引一一对应（Blender 9 / 纯 Python 11）；README 中引用的文件名全部存在。
 
 ---
 
@@ -274,4 +271,6 @@ warno-modding/
 
 | 提交 | 内容 |
 |---|---|
-| `1399787` | 初始化本地仓库：`SKILL.md` + 14 份 references + 20 个 scripts + `.gitignore` / `.gitattributes` |
+| `1399787` | 初始化仓库：`SKILL.md` + 14 份 references + 20 个 scripts + `.gitignore` / `.gitattributes` |
+| `7555d2d` | 新增 README：权威层级、知识与工具地图、给智能体的执行清单、定稿参数总表、证据状态 |
+| 修正提交 | 修正上表三处不一致；README 去除本机专属路径与本地工作状态，面向公开发布 |

@@ -1,2 +1,0 @@
-# 由 depiction_anchors.py 生成，来源 DepictionVehicles.ndf
-fx_tourelle1_tir_01
