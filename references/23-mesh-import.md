@@ -239,8 +239,21 @@ Operators / SubDepictions。`--verbose` 会标出每个名字出自哪个字段�
 **它会跳过注释掉的算子**（NDF 里 `// Op_X is ...` 不参与编译，引擎确实读不到），
 所以"清单里少了一对锚点"往往意味着**那门武器的算子还注释着**——这是信号，不是 bug。
 
-> 已知盲区：`--key` 只从**一个** depiction 注册块出发。若单位还挂了
-> Showroom / Ghost 注册块里有额外锚点，要再跑一次 `--object` 那几个块。
+> 已知盲区（**2026-11-09 实机 Fatal error 的真实成因**）：
+> 1. `--key` 只从**一个** depiction 注册块出发。若单位还挂了
+>    Showroom / Ghost 注册块里有额外锚点，要再跑一次 `--object` 那几个块。
+> 2. 它**只扫传进去的那一个 NDF 文件**。`Actions = MAP[...] + DepictionAction_X`
+>    里的 `DepictionAction_X` 定义在 `Gameplay/Gfx/Units/DepictionActions.ndf`，
+>    工具看不到 → 漏掉那里的 `Anchor = 'fx_eau'`（两栖水花 / 两栖行进），
+>    进游戏报 `Missing anchor bone 'fx_eau'`，**编译期零报错**。
+>
+> 需要完整清单时用跨文件版，它同时取三个注册点的并集并直接和 FBX 做差集：
+>
+> ```bash
+> python scripts/depiction_anchors_all.py --key OBJECT_685 \
+>        --fbx "<资产>/Object_685.fbx" [--mod <mod根> --base <原版GameData父目录>]
+> # 0 缺失 → rc=0；有缺失逐条打印「缺谁 ← 哪个块引用的」→ rc=1
+> ```
 
 ### 3.1 带网格的强制节点要"藏"，不能省
 
@@ -263,8 +276,21 @@ Operators / SubDepictions。`--verbose` 会标出每个名字出自哪个字段�
 
 | 步 | 做什么 | 为什么必须 |
 |---|---|---|
-| 1 | 绕世界 Z **−90°** | 外部模型常是 +Y 朝前，WARNO 要 **+X**。反了就改 +90 |
+| 1 | 绕世界 Z **−90°** | 外部模型常是 +Y 朝前，WARNO 要 **+X**。反了就改 +90。⚠ **也有 −Y 朝前的**（RAH-66 实测：机头 −Y、尾桨 +Y，且长轴在 **Y** 上而不是 X），所以旋转量要按模型实测判定，不能默认 +Y。判据：先看包围盒哪个轴最长，再用**单侧视渲染**确认机头在哪端 |
 | 2 | 解父级时**保留世界矩阵**（`matrix_world.copy()` 后再 apply） | 直接 `parent=None` 会丢变换。实测宽度从 117 m 涨到 186 m |
+
+> **Sketchfab 模型的加固版写法**（LAV-600 实测）：Sketchfab 转存的父空物体**自身带旋转**
+> （如 −90° X），只改 object 级 `matrix_world` 会在依赖图没刷新时读到旧值，坐标全乱
+> （轮心一度变成 (−1.19, −0.61, −1.51)）。稳妥做法是**把世界矩阵烘进网格数据**再脱父级：
+>
+> ```python
+> mw = ob.matrix_world.copy()
+> ob.data.transform(mw)      # 先烘进 mesh data
+> ob.parent = None
+> ob.matrix_world = Matrix.Identity(4)
+> ```
+>
+> 烘完立刻抽查一个已知点（轮心 / 炮口）的世界坐标，别等锚点全算完才发现错了。
 | 3 | 全部网格合并成单一 **`Chassis`** | 多网格单位要各自配 LOD 与 depiction，不划算；`Chassis` 是硬名 |
 | 4 | `remove_doubles(0.001)` | 体素重构/布尔运算后有余留重复顶点，焊接后顶点数才准 |
 | 5 | 重建 UV：`cube_project(cube_size = 最长边 / 3.5)` | 压到 ±1.75，躲开 ±4 红线。cube_size 1.0 会让 302 m 舰体冲到 142 |
@@ -397,6 +423,10 @@ Blender 源模型常不是 1 单位 = 1 m（本项目 MiG-29M 是 **1 单位 = 0
 
 三次错误的共同点：**都是"我自己找 + 自己判断"**，一次都没有在动手前把候选区域摊给用户看。
 
+> **成功对照（LAV-600 同轴机枪口，2026-11-10）**：同一类问题，一开始也走了「渲特写→自己猜壳」的弯路
+> （三轮渲染都没认出那个锥形护罩），换成点格子法后**一轮定案**——用户报 `I4` →
+> `pick --cam-json` 反算 → 红球复核用户点头 → 才动烘焙。成本对比：猜 3 轮 vs 问 1 轮。
+
 #### 【验收】提问到位的三条标准
 
 1. 问的是**用户能一句话回答**的问题（报格子 / 说是哪个部件），不是"帮我看看这个模型哪里不对"。
@@ -435,6 +465,10 @@ loc = co + n * SURFACE_OUT                      # SURFACE_OUT ≈ 1.5 m
 
 规矩：**锚点坐标只在「最终导出的那个网格」上量**。原始模型 / 中间 blend 上的测量值全部作废。
 流水线里写成「现场量壳面再外露 0.6 m」的自适应形式，重建模型后不必手改数值。
+
+> **烘焙脚本的坐标系陷阱（LAV-600 实测）**：`attach()` 把网格顶点平移到枢轴局部系之后，
+> 再用顶点算出的坐标是**局部值**，写锚点位置必须 `+= pivot` 换回世界系。漏加的症状很典型：
+> 炮口 Z 算成 0.02（实际 2.19），而「0.02 ≈ 剩了一点小数」的样子会骗你以为是取整问题。
 
 ### 5.4 人体锚点（`pilot` / `driver` / `tireur`）：锚点是**模型原点**，不是座垫面
 
@@ -495,9 +529,21 @@ export Modele_SE_X is TResourceMesh
 
 **两条禁令：**
 
-1. ❌ **不要新建 `.ndf` 文件。** 新文件不在 `base.zip` 清单里，引擎**不编译、不加载**，
-   现象是 `找不到 Modele_X`。要加内容就**追加到清单内已存在的文件**（本项目追加进
-   `SharedResources.ndf`）。
+1. ⚠️ **新建 `.ndf` 文件必须登记到资源清单，否则不编译、不加载。**
+   现象是 `找不到 Modele_X`，而且**编译期完全静默**。
+
+   这条以前写成「一律不要新建 `.ndf`」，是把「不登记」的后果误记成了「新建」的后果。
+   实测两条路都能跑通，选哪条取决于你想不想让这份资源跟单位一起走：
+
+   | 范式 | 做法 | 前提 | 实测 |
+   |---|---|---|---|
+   | **A · 追加** | 把 `TResourceMesh` 追加进清单内已有的 `DepictionResources/SharedResources.ndf` | 该文件本就在 `base.zip` 清单里，追加即生效 | skill 原推荐路径 |
+   | **B · 专属文件** | 新建 `Gameplay/Gfx/DepictionResources/Char/<单位>.ndf`，**再往 `Generated/Gameplay/Gfx/NdfDepictionList.ndf` 追加一行** `"GameData:/Gameplay/Gfx/DepictionResources/Char/<单位>.ndf",` | **必须登记**；否则文件在磁盘上但引擎不认 | Kh-22 / 9K79 Tochka / M752 Lance / Object 685（2026-11-10 实机通过） |
+
+   B 的额外好处：删单位时连同资源文件一起删，不留残块；坏处就是那行登记容易漏 —— 漏了不报错。
+
+   **文件名必须与登记字符串完全一致（建议全大写 `<单位>.ndf`）**：Windows 文件系统大小写不敏感，
+   而 `NdfDepictionList` 是字符串精确比较，写小写会造成同一路径重复登记、双份资源。
 2. ❌ **不要用 `export X is "路径"` 简写。** 那样定义出来是 `TEugBString`，当 `MeshDescriptor`
    用会报 `Cannot convert from <TEugBString> to <TResourceMesh>`。必须写完整 `TResourceMesh`。
 

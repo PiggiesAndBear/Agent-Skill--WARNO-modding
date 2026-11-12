@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WARNO 高抛弹道设计器 v5 · 派生 α 模型 · 弧度单位</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1d212a; --line:#2a2f3a;
+  --tx:#e6e9ef; --mut:#98a2b3; --dim:#6b7484;
+  --blue:#5b9dff; --amber:#f0b429; --amber2:#ffd479; --red:#ef6b73; --green:#54c08a;
+  --warn:#ff9f68;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--tx);
+  font-family:"Segoe UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif;font-size:13px}
+.app{max-width:1500px;margin:0 auto;padding:18px 20px 34px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:12px}
+h1{font-size:19px;margin:0;font-weight:650;letter-spacing:.3px}
+h1 small{font-size:12px;color:var(--mut);font-weight:400;margin-left:8px}
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;
+  border:1px solid var(--line);color:var(--mut);background:var(--panel2)}
+.badge.live{color:var(--green);border-color:#2c5540}
+.badge.infer{color:var(--warn);border-color:#5a3d28}
+.badge.v3{color:var(--amber2);border-color:#6b5527}
+.spacer{flex:1}
+select,button,input[type=number],input[type=file]{background:var(--panel2);color:var(--tx);
+  border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-family:inherit;font-size:12px}
+button{cursor:pointer;transition:.15s}
+button:hover{background:#2a3040;border-color:#3d4658}
+button.primary{background:#24456e;border-color:#37639c;color:#dceaff}
+button.primary:hover{background:#2c5386}
+button.mini{font-size:11px;padding:5px 8px}
+.disclaimer{background:#241d17;border:1px solid #5a3d28;border-left:3px solid var(--warn);
+  border-radius:6px;padding:9px 13px;color:#e8cfb8;font-size:12px;line-height:1.65;margin-bottom:14px}
+.disclaimer b{color:var(--warn)}
+.disclaimer .new{color:var(--amber2)}
+.layout{display:grid;grid-template-columns:340px minmax(0,1fr);gap:14px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:14px}
+.panel h2{font-size:12px;text-transform:uppercase;letter-spacing:1.1px;color:var(--mut);
+  margin:0 0 12px;font-weight:600}
+.group{margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:10px}
+.group:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.group>summary{cursor:pointer;font-size:11px;color:var(--blue);letter-spacing:.6px;
+  text-transform:uppercase;margin-bottom:9px;user-select:none;font-weight:600}
+.row{margin-bottom:9px}
+.row .lab{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:3px}
+.row .lab span{font-size:12px}
+.row .lab .num{color:var(--blue);font-variant-numeric:tabular-nums;font-weight:600;font-size:12px}
+.row .fld{font-size:10px;color:var(--dim);margin-bottom:4px;line-height:1.35;
+  font-family:Consolas,"Cascadia Mono",monospace;word-break:break-all}
+.ctl{display:flex;gap:7px;align-items:center}
+.ctl input[type=range]{flex:1;min-width:0;accent-color:var(--blue);height:16px}
+.ctl input[type=number]{width:68px;text-align:right;padding:3px 5px;font-size:11px;
+  font-variant-numeric:tabular-nums}
+.ctl .u{width:30px;color:var(--dim);font-size:10px}
+.ctl select{flex:1;min-width:0;width:100%;font-size:11px;padding:5px 6px}
+.stage .chart-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.chart-head h2{margin:0}
+.shape-tag{padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600}
+.shape-arch{background:#2b3d2a;color:#9fe0a0;border:1px solid #3e6040}
+.shape-trap{background:#2a3450;color:#a9c4ff;border:1px solid #3b4d78}
+.shape-flat{background:#3a3a3a;color:#c9c9c9;border:1px solid #505050}
+.shape-bad{background:#3d2226;color:#ffb3b8;border:1px solid #6a3540}
+.shape-attn{background:#3a2f18;color:#ffd479;border:1px solid #6b5527}
+svg{width:100%;height:auto;display:block;background:var(--panel2);border-radius:6px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.metric{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.metric .k{font-size:10px;color:var(--mut);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric .v{font-size:16px;font-weight:650;font-variant-numeric:tabular-nums}
+.metric .v small{font-size:10px;color:var(--dim);font-weight:400;margin-left:3px}
+.metric .sub{font-size:9.5px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric.bad{border-color:#6a3540;background:#2a1c20}
+.metric.bad .v{color:var(--red)}
+.metric.attn{border-color:#6b5527;background:#262116}
+.metric.attn .v{color:var(--amber2)}
+.notes{margin-top:11px;display:flex;flex-direction:column;gap:6px}
+.note{font-size:11.5px;line-height:1.55;padding:7px 10px;border-radius:5px;
+  background:var(--panel2);border-left:3px solid var(--line);color:var(--mut)}
+.note.warn{border-left-color:var(--warn);color:#f0c9ad;background:#241d17}
+.note.err{border-left-color:var(--red);color:#ffc4c8;background:#2a1c20}
+.note.ok{border-left-color:var(--green);color:#bfe4cd}
+.note b{color:var(--tx)}
+.note code{background:#0e1116;padding:1px 4px;border-radius:3px;font-size:10.5px}
+.out{margin-top:14px}
+.out .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:9px}
+.out .bar h2{margin:0;flex:1}
+textarea{width:100%;height:270px;background:#0c0e12;color:#d5dde9;border:1px solid var(--line);
+  border-radius:6px;padding:11px;font-family:Consolas,"Cascadia Mono",monospace;
+  font-size:11.5px;line-height:1.5;resize:vertical;white-space:pre}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--mut);margin-top:8px}
+.legend i{display:inline-block;width:16px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+footer{margin-top:14px;color:var(--dim);font-size:11px;line-height:1.7}
+footer code{background:var(--panel2);padding:1px 5px;border-radius:3px;color:var(--mut)}
+@media(max-width:1000px){.layout{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>WARNO 高抛弹道设计器 <small>v6.6 · 末段闭环制导 · ω 尺度 k 默认 1.5</small></h1>
+    <span class="badge live">字段来自 base.zip 实测 · 197 个导弹</span>
+    <span class="badge v3">加速度决定形态 · 渐开线段</span>
+    <span class="badge infer">实机裁定：两段都变缓 / 巡航超调 / 落点偏远</span>
+    <span class="badge v3">ω 尺度 k = 1.5（默认）</span>
+    <span class="spacer"></span>
+    <label style="font-size:12px;color:var(--mut)">预设&nbsp;
+      <select id="preset"></select>
+    </label>
+    <button id="btnImport">导入 JSON</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none">
+  </header>
+
+  <div class="disclaimer">
+    <b>模型声明 · v6 修订</b>：<span class="new">加速度会改变轨迹形态</span>（这条推翻了 v5 的「加速度只进时间轴」，见报告 §8.7）。机制很简单 ——
+    转向角速度恒为 <code>ω = AutoGyr(rad)·k</code>，而段内速度按 <code>MaxAccelerationGRU</code> 从 <code>v₀</code> 均匀趋向本段 <code>MaxSpeedGRU</code>，
+    于是曲率半径 <code>R = v/ω</code> <b>逐点变化</b>：a 越小 ⇒ 早段越慢 ⇒ R 越小 ⇒ 转得越紧、爬升越"拱"。<br>
+    a 与 ω 恒定时该段在解析上是<b>圆的渐开线</b>（<code>r = a/ω²</code>、<code>R = rψ</code>）—— 工具用时间步中点法积分，回归里与解析式逐点比对。
+    想在工具里看差别：把「速度律」在 <b>按加速度均匀变速</b> 与 <b>段内恒速（v5 旧口径）</b> 之间切换，同一份 NDF 会给出两条不同弹道。<br>
+    v6 沿用的结构：<b>拉起弧 → 斜直线 → 改平弧</b>，末端与 <b>CruiseAltitudeGRU</b> 严格相切；<b>α</b> 仍由几何派生，不是可填参数。<br>
+    <b>v6.6 · ω 尺度 k 定标为 1.5（2026-11-08）</b>：<code>k</code> 从 1.00 改为 <b>1.5</b>（实际 <code>ω = AutoGyr(rad)·1.5</code>），两个预设的默认值同步。<b>只改默认值、不改任何建模口径</b>：把参数栏「ω 尺度 k」改回 1.00 即可逐位复现 v6.5 及更早的全部数字（<code>R ∝ 1/k</code>，k=1.5 时曲率半径一律缩到 1/1.5）。<br>
+    <b>v6.5 · 末段制导修正（2026-11-08 第六轮实机）</b>：实机发现<b>超调时导弹仍在俯冲段角速度允许范围内尽可能调整俯角</b>，并非冻结在某个下压角；<b>只要还有剩余高度，水平投影越过目标再折返回来也是允许的</b>。⇒ 末段改「闭环追踪」：每步朝 <code>atan2(h_t−y, D−x)</code> 转（全象限 —— 越过 D 后目标在后方、俯角 &gt; 90°，导弹折返），落点 = 轨迹穿越目标高度线处（可 &lt; D / ≈ D 回抓命中 / &gt; D 未回抓）；v6.4 的「固定下压角」降为参数栏「末段制导 → fixed」对照口径。<br>
+    <b>v6.4 · 三条实机裁定（2026-11-08，其中 ③ 已被 v6.5 推翻）</b>：① 调低 <code>Ascendant.AutoGyr</code> 时<b>拉起弧与改平弧两段都变缓</b> ⇒ 上升段统一用 <code>gAsc</code>（参数栏「转向率归属」切 split 可逐位对照旧分相口径）；② ω 偏低 + H 不足时<b>引擎不会为凑 H 反调 α</b> ⇒ 改「自由超调」工况，α 保持 θ₀、相切高度自由高于巡航线；③ <s>末段下压角按设定 H 预先定死、不随实际高度重算 ⇒ 命中点落在目标之后</s>（<b>v6.5 推翻</b>：实际是闭环修正俯角，可过冲后折返）。<br>
+    ⚠ 仍属推断的是：ω 的绝对时间尺度 k（**当前定标 1.5**，仍是推断值）、GRU↔m 换算、末段/平飞是否也共用同一个 ω。字段名、默认值、四段结构、速度硬约束来自实测。
+    图默认 <b>1:1 等比例</b>（不启用纵向自动放大）；需要放大时可在参数栏最上方手动调倍数并会自动标注。结论以进游戏 A/B 为准。<br>
+    <b>v5 · 单位口径（保留）</b>：<span class="new">角度输入一律弧度</span>（NDF 原生单位），
+    <code>θ₀</code> / <code>AutoGyr</code> / 手动 α 全部按 rad 填；参数名右侧蓝字仍给「弧度 · 度数」换算，导出片段直接是弧度。
+  </div>
+
+  <div class="layout">
+    <aside class="panel">
+      <h2>参数</h2>
+      <div id="params"></div>
+      <div style="margin-top:12px;display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <button id="btnCalib" class="mini" title="反解使爬升段恰好落在 D−Dt 预算内的 ω 尺度">按预算反解 k</button>
+        <button id="btnReset" class="mini">恢复预设</button>
+      </div>
+      <div style="margin-top:9px;font-size:10.5px;color:var(--dim);line-height:1.5">
+        <b style="color:var(--blue)">角度一律用弧度输入</b>（与 NDF 同口径，1° = 0.017453 rad）；
+        参数名右侧蓝字给出「弧度值 · 度数换算」。滑块步长 0.001 rad ≈ 0.057°，要精确到整角度直接填数字框。
+        「ω 尺度 k」是待定标系数：实际角速度 = AutoGyr(rad) × k。
+        <b style="color:var(--green)">加速度不是时间轴装饰</b>：段内 v 按 a 均匀变 ⇒ R = v/ω 逐点变，改 a 就改形状。
+        <b>α、k、v₀ 都不是 NDF 字段</b>，不会写进导出片段。
+      </div>
+    </aside>
+
+    <main class="panel stage">
+      <div class="chart-head">
+        <h2>轨迹剖面</h2>
+        <span id="shapeTag" class="shape-tag shape-arch">—</span>
+        <span class="spacer"></span>
+        <span id="zoomLabel" style="font-size:11px;color:var(--warn)"></span>
+      </div>
+      <svg id="chart" viewBox="0 0 960 460" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="legend">
+        <span><i style="background:var(--amber)"></i>圆弧₁ · 拉起/压转（R₁ = va/ω_asc）</span>
+        <span><i style="background:var(--green)"></i>斜直线 · θ = α 恒定</span>
+        <span><i style="background:var(--amber2)"></i>圆弧₂ · 改平（R₂ = vc/ω_def）</span>
+        <span><i style="background:var(--blue)"></i>平飞（余数段）</span>
+        <span><i style="background:var(--red)"></i>末段 · 转向对准</span>
+        <span><i style="background:#ff9c9c"></i>末段 · 对准后直线</span>
+        <span><i style="background:#4a5262"></i>地面 / 参考线</span>
+      </div>
+      <div class="metrics" id="metrics"></div>
+      <div class="notes" id="notes"></div>
+    </main>
+  </div>
+
+  <section class="panel out">
+    <div class="bar">
+      <h2>导出 · TGuidedMissileMovementModuleDescriptor</h2>
+      <button id="btnCopy" class="primary">复制 NDF 片段</button>
+      <button id="btnJson">下载参数 JSON</button>
+      <button id="btnPng">下载轨迹 PNG</button>
+    </div>
+    <textarea id="ndf" spellcheck="false" readonly></textarea>
+    <div class="legend">
+      <span>⚠ 混沌参数（<code>TimeBetweenChaosUpdates</code> 等）沿用 AGM114 官方值，与弹道形状无关。</span>
+      <span>⚠ <code>AutoGyr</code> / <code>AngleRotationBasePitch</code> 在 NDF 中是<b>弧度</b>，本工具输入也是<b>弧度</b>（蓝字给度数换算）；<b>α 与 ω 尺度 k 不写进 NDF</b>。</span>
+    </div>
+  </section>
+
+  <footer>
+    数据源：<code>GameData/Generated/Gameplay/Gfx/MissileDescriptors.ndf</code> ·
+    <code>AmmunitionMissiles.ndf</code> · <code>WeaponDescriptor.ndf</code> · <code>WARNO.exe</code>（字段名命中）。
+    全库 197 个导弹中仅 4 个（AGM114A ×2_sol / ×4 / ×8 / ×16）走高抛，四者参数逐字段相同；
+    其余 193 个 <code>CruiseAltitudeGRU = 0.0</code>。硬约束
+    <code>Ammunition.ProjectileSpeedGRU == DefaultConfig.MaxSpeedGRU</code> 全库 197/197 恒等。
+    曲射炮击（<code>PitchForParabolic</code>）与航弹（<code>BombTrajectoryConfigs</code>）是另外两套机制，字段零重叠。
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ---- 工具函数与角度单位 ----
+   NDF 里所有角度字段（AutoGyr / AngleRotationBasePitch…）存的是**弧度**，
+   所以 v5 起内部一律用弧度，输入框也用弧度；度数只在蓝字与指标卡里做换算显示。
+   唯一例外是滑块步长按「度」的整数感设计（0.001 rad ≈ 0.057°）。 */
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const rad = d => d*Math.PI/180;
+const deg = r => r*180/Math.PI;
+const fmt = (v,n=1) => Number(v).toLocaleString("zh-CN",{minimumFractionDigits:n,maximumFractionDigits:n});
+const esc = t => String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+const GROUPS = [
+  { title:"显示设置", open:true, items:[
+    {k:"zoom", n:"纵向放大倍数", f:"【显示】默认 ×1（1:1 等比例、不自动放大）；需要放大时手动拖，或勾选下面的「纵向自动放大」由工具按绘图区高度计算。只改视图，不改轨迹数据，也不写进导出片段", min:1,max:60,step:0.5,v:1,u:"×"},
+    {type:"display", k:"viewCtl", n:"视图控制",
+      f:"【显示】默认 1:1 且不勾选自动放大；需要时勾选自动放大或手动调上面的倍数。点「1:1 等比例」可随时回到 ×1，按真实比例看曲率才不会被拉伸误导（§5.9）"}
+  ]},
+  { title:"几何 · 实测字段", open:true, items:[
+    {k:"D",    n:"交战水平距离 D",       f:"MaximumRangeGRU（射程设计上限）",                 min:200, max:40000, step:50, v:2800, u:"m"},
+    {k:"H",    n:"巡航高度 H",            f:"CruiseAltitudeGRU · 爬升段要与之相切的水平线",   min:0,   max:10000, step:1,  v:141,  u:"m"},
+    {k:"Dt",   n:"末段触发距离 Dt",       f:"HorizontalDistanceToTargetToStartTerminalPhaseGRU", min:0,max:20000,step:50,v:2000,u:"m"},
+    {k:"h0",   n:"发射点高差 h₀",         f:"【场景量】非 NDF 字段",                          min:-200,max:1500,step:10,v:0,   u:"m"},
+    {k:"ht",   n:"目标高差 hₜ",           f:"【场景量】非 NDF 字段",                          min:-200,max:1500,step:10,v:0,   u:"m"},
+    {k:"theta0",n:"发射仰角 θ₀",          f:"【场景量】武器侧 AngleRotationBasePitch · NDF 弧度制 · 上限 1.5533 rad ≈ 89°（近垂直发射走压转分支）", min:-1.5534,max:1.5534,step:0.002,v:0,u:"rad",ang:true},
+    {k:"v0",   n:"发射初速 v₀",            f:"【场景量】实测「自静止」⇒ 0；机载发射填载机速度（此时爬升从该速起算）", min:0,max:3000,step:10,v:0,u:"m/s"}
+  ]},
+  { title:"派生规则 · 核心（v6）", open:true, items:[
+    {k:"speedModel", n:"速度律 ★", f:"【模型选择】accel = 段内按加速度均匀变速（实测行为）；const = v5 旧口径（段内恒速），仅作 A/B 对照", type:"select",
+      options:[["accel","按加速度均匀变速 · R = v/ω 逐点变化（实测）"],
+               ["const","段内恒速 · 定半径圆弧（v5 旧口径，对照用）"]], v:"accel"},
+    {k:"alphaRule", n:"α 派生规则 ★", f:"【模型选择】α 不是 NDF 字段，也不是可拖参数，由下面规则解出；ω 偏低时会自动切到「自由超调」工况", type:"select",
+      options:[["sym","单相位闭环（默认）· 拉起弧与改平弧首尾相接、合计吃满高差 ⇒ L = 0"],
+               ["dualphase","双相位闭环 · 拉起弧吃一半高差（v4/v5 旧规则，仅恒速口径自洽）"],
+               ["manual","手动 α（仅作对照，非实测语义）"]], v:"sym"},
+    {k:"omegaRule", n:"转向率归属 ★", f:"【实机裁定 v6.4】调低 Ascendant.AutoGyr 时拉起弧与改平弧「两段都变缓」⇒ 上升段统一用 gAsc；split 是 v5/v6 旧分相口径，仅作逐位对照", type:"select",
+      options:[["unified","上升段统一 gAsc（默认）· 两段都随 gAsc 变缓（实机）"],
+               ["split","分相（旧口径）· 拉起 gAsc / 改平 gDef，仅作对照"]], v:"unified"},
+    {k:"terminalRule", n:"末段制导 ★", f:"【实机裁定 v6.5】超调时引擎仍在俯冲段 ω 允许范围内尽可能调俯角；只要还有剩余高度，水平投影越过目标再折返回来也允许 ⇒ closed 闭环追踪；fixed 是 v6.4「冻结下压角」旧口径（落点必 ≥ D），仅作对照", type:"select",
+      options:[["closed","闭环追踪（默认）· 逐步修正俯角，可过冲后回抓"],
+               ["fixed","固定下压角（v6.4 旧口径）· 落点必 ≥ D，仅作对照"]], v:"closed"},
+    {k:"alphaRad", n:"手动 α（仅 manual）", f:"【对照用】select 选 manual 时才生效；其余规则下 α 是输出", min:0.0175,max:1.0472,step:0.001,v:rad(15),u:"rad",ang:true}
+  ]},
+  { title:"运动 · 四段 config", open:true, items:[
+    {k:"vc",   n:"平飞段速度 vc",    f:"DefaultConfig.MaxSpeedGRU · 兼定改平弧 R₂",  min:100,max:6000,step:10,v:1060,u:"m/s"},
+    {k:"va",   n:"爬升段速度 va",    f:"AscendantPhaseConfig.MaxSpeedGRU · 定拉起弧 R₁", min:100,max:6000,step:10,v:1500,u:"m/s"},
+    {k:"vt",   n:"末段速度 vt",      f:"TerminalPhaseConfig.MaxSpeedGRU",        min:100,max:6000,step:10,v:1500,u:"m/s"},
+    {k:"gDef", n:"平飞 AutoGyr",     f:"DefaultConfig.AutoGyr（全库 14 档）· 仅 split 旧口径下才定改平弧 R₂", min:0.0175,max:1.9199,step:0.001,v:rad(50),u:"rad",ang:true},
+    {k:"gUnc", n:"失控段 AutoGyr",   f:"UncontrollableConfig.AutoGyr",           min:0.0175,max:1.9199,step:0.001,v:rad(25),u:"rad",ang:true},
+    {k:"gAsc", n:"上升段 AutoGyr ★", f:"AscendantPhaseConfig.AutoGyr · 定拉起弧 R₁ 与改平弧 R₂（实机：两段都随它变缓）", min:0.0175,max:1.9199,step:0.001,v:rad(30),u:"rad",ang:true},
+    {k:"gTrm", n:"末段 AutoGyr ★",   f:"TerminalPhaseConfig.AutoGyr · 决定 R_trm 与对准点", min:0.0175,max:1.9199,step:0.001,v:rad(30),u:"rad",ang:true},
+    {k:"kOmega",n:"ω 尺度 k",        f:"【待定标】实际 ω = AutoGyr(rad) × k；不写进 NDF。默认 1.5 为当前标定值（改回 1.00 可复现 v6.5 及更早的数字）", min:0.1,max:10,step:0.05,v:1.5,u:"×"}
+  ]},
+  { title:"加速度 · 决定形态（v6）", open:true, items:[
+    {k:"ac", n:"Default MaxAccelerationGRU",    f:"DefaultConfig · 改平弧与平飞段的速度律（直接改形状）", min:10,max:6000,step:1,v:353, u:"m/s²"},
+    {k:"aa", n:"Ascendant MaxAccelerationGRU",  f:"AscendantPhaseConfig · 拉起弧 + 斜直线，自 v₀ 加速到 va", min:10,max:6000,step:1,v:530, u:"m/s²"},
+    {k:"at", n:"Terminal MaxAccelerationGRU",   f:"TerminalPhaseConfig · 末段转向时的速度律",              min:10,max:6000,step:1,v:1060,u:"m/s²"}
+  ]}
+];
+
+/* 预设：所有角度字段一律**弧度**（与 NDF 同口径），用 rad() 标注原官方度数 */
+const PRESETS = {
+  agm_hi: { label:"SRBM", tag:"实测",
+    D:40000,H:5000,Dt:8000,h0:0,ht:0,theta0:rad(78),v0:0,speedModel:"accel",vc:2400,va:1200,vt:3600,
+    gDef:0.349,gUnc:0.349,gAsc:0.349,gTrm:0.349,kOmega:1.5,ac:200,aa:150,at:100,zoom:1,flat:false,
+    alphaRule:"sym",alphaRad:rad(15),omegaRule:"unified",terminalRule:"closed",
+    info:"用户给出的 TGuidedMissileMovementModuleDescriptor：Default 2400/200、Uncontrollable 1200/400、Ascendant 1200/150、Terminal 3600/100，四段 AutoGyr 全为 0.349 rad = 20°；H=5000 来自 CruiseAltitudeGRU。<b>D=40000、Dt=8000、θ₀=78° 是占位假设</b>（NDF 里 Dt 写的是 5000，见下）。<b>爬升结论（按默认 ω 尺度 k=1.5）</b>：在 α = θ₀ = 78° 时两段转向弧加起来只能爬 1,800 m（就算把 α 拉到 88.5° 上限也只有约 2,224 m），装不下 5000 m ⇒ 工具判定「需要保持段」，α 保持 θ₀、斜直线 L≈3.29 km（ω=0、R=∞），改平弧 R 从 1.90 km <b>单调</b>长到 2.89 km，相切残差 &lt; 1 cm。把「ω 尺度 k」改回 1.00 可复现旧数字：只能爬 2,699 m、L≈2.47 km、改平弧 R 2.42 → 4.70 km。<br><b>关于 Dt=5000</b>：把末段触发距离改成 NDF 的 5000 后，工具会报「末段来不及对准」—— 从 5000 m 高、约 1513 m/s 平飞，要以 20°/s 压到瞄准线，头会先飞过目标。这条与爬升无关，是末段转向能力的独立约束（见告警）。" },
+  agm114: { label:"AGM114A", tag:"实测",
+    D:2800,H:141,Dt:2000,h0:0,ht:0,theta0:0,v0:0,speedModel:"accel",vc:1060,va:1500,vt:1500,
+    gDef:rad(50),gUnc:rad(25),gAsc:rad(30),gTrm:rad(30),kOmega:1.5,ac:353,aa:530,at:1060,zoom:1,flat:false,
+    alphaRule:"sym",alphaRad:rad(15),omegaRule:"unified",terminalRule:"closed",
+    info:"原版唯一的高抛实例族（4 个变体参数全同）。<b>v6.4 实机裁定：调低 Ascendant.AutoGyr 时拉起弧与改平弧「两段都变缓」⇒ 上升段统一用 gAsc</b>，改平弧名义 R₂=1350 m（旧 split 口径是 810 m）。<b>以下数字按默认 ω 尺度 k=1.5</b>：自静止、aa=530 时拉起弧末速只有 380 m/s（远未到 va=1500）⇒ R 从 0 长到 484 m，派生 <b>α=32.3°、相切于 x=472 m</b>、平飞 328 m 后进末段，T≈3.39 s，相切速度 633 m/s，入射角 4.1°。把「ω 尺度 k」改回 1.00 即 v6 及更早的基线：α=24.5°、相切 x=629 m、平飞 171 m、相切速度 722 m/s。想逐位复核 v5/v6 旧数字，再把「转向率归属」切到 split：accel 得 α=27.5°/L_asc=520 m，再切「段内恒速」得 α=15.1°/L_asc=1063 m。TirIndirect = False。" },
+  custom: { label:"自定义", tag:"", info:"" }
+};
+
+let S = Object.assign({}, PRESETS.agm_hi);
+let currentPreset = "agm_hi";
+let autoZoom = false;
+
+/* ==================================================================
+   核心几何 v6：速度随行程变化 + 曲率受限转向（纯函数，可脱离 DOM 验证）
+   ------------------------------------------------------------------
+   实机事实（2026-11-08，三轮）：
+     ① 发射仰角上限 89° = 1.5533 rad；
+     ② 导弹自**静止**按 MaxAccelerationGRU 均匀加/减速，直到本段 MaxSpeedGRU；
+     ③ **加速度会改变轨迹形态**（v6 修正；v5 把它当"只进时间轴"是错的，见报告 §8.7）；
+     ④ 斜直线仰角 α 由算法按「预期速度 + 转向能力」派生，不是外生可调量；
+     ⑤ 爬升段存在斜着直飞的一段；⑥ 末端与巡航高度相切，末段转向对准后直线命中。
+
+   机制：转向角速度恒为 ω = AutoGyr(rad)·k（"转向能力"），
+   而速度在本段内按 a 均匀变化 ⇒ 曲率半径 R = v/ω **逐点变化**。
+   加速度因此直接改形状：a 越小 ⇒ 早段越慢 ⇒ R 越小 ⇒ 转得越紧、爬升越"拱"。
+   （a 与 ω 都恒定时，该段可解析证明是**圆的渐开线**：r = a/ω²、ψ = v·ω/a、R = rψ；
+     工具用时间步中点法数值积分，与该解析式等价 —— 回归里有一项专门比对。）
+
+   分相速度约定（【待验】模型选择，报告 §5.8）：
+     拉起弧 / 斜直线  Ascendant：v 从 v₀ 按 aa 趋向 va，ω = ω_asc
+     改平弧 / 平飞     Default  ：v 从上一段末速按 ac 趋向 vc，ω = ω_def
+     末段             Terminal ：v 按 at 趋向 vt，ω = ω_trm，转到对准后直线命中
+   上一段末速 = 下一段初速；发射初速 v₀ 默认 0（实测"自静止"），面板可改。
+   mode = "const" 是 v5 旧口径（段内恒速），只用于 A/B 对照，不是实机行为。
+   ================================================================== */
+
+function speedModeOf(S){ return S.speedModel==="const" ? "const" : "accel"; }
+/* v6.4 实机裁定：调低 Ascendant.AutoGyr 时「拉起弧与改平弧两段都变缓」⇒
+   上升段的两段转向共用一个 ω = gAsc·k。split 保留 v5/v6 旧分相口径（改平弧读 gDef）作逐位对照。 */
+function omegaDefOf(S,k){
+  return Math.max(1e-6,Math.abs((S.omegaRule==="split"?S.gDef:S.gAsc)||0)*k);
+}
+/* v6.5 实机修正：末段是**闭环制导** —— 超调时引擎仍会在俯冲段角速度允许范围内
+   尽可能调整俯角；只要还有剩余高度，水平投影越过目标再折返回来也是允许的。
+   ⇒ closed（默认）每步朝 atan2(ht−y, D−x) 转向（全象限，x>D 时俯角>90°），落点由几何定。
+   fixed 是 v6.4「按设定 H 冻结下压角」的旧口径，仅保留作逐位对照。 */
+function terminalRuleOf(S){ return S.terminalRule==="fixed" ? "fixed" : "closed"; }
+
+/* 段内速度：沿时间均匀趋向 vmax，不越过 */
+function nextV(v,vmax,a,dt){
+  const d=(vmax-v)>=0?1:-1;
+  let ve=v+d*Math.max(0,a)*dt;
+  if((ve-vmax)*d>0) ve=vmax;
+  return Math.max(0,ve);
+}
+function cloneState(s){ return {x:s.x,y:s.y,th:s.th,v:s.v,t:s.t,s:s.s}; }
+
+/* 按 ω 转向 dTheta（带符号），同时速度按 a 趋向 vmax。
+   逐子步：dt = |dΘ|/(ω·N)；位移用两端速度均值 × dt、方向用中点角（二阶精度）。
+   这就是加速度改变形态的数值实现：R = v/ω 随 v 逐点变化。
+   mode="const" 时速度被钉在本段 vmax（v5 旧口径，仅作对照）。 */
+function turnStep(pts, st, dTheta, vmax, accel, omega, mode, N){
+  const ad=Math.abs(dTheta);
+  if(!isFinite(ad)||ad<1e-12||!isFinite(omega)||omega<=0) return;
+  const n=Math.max(6,N||64), sg=dTheta>0?1:-1;
+  if(mode==="const") st.v=vmax;
+  const dt=ad/(omega*n);
+  for(let i=0;i<n;i++){
+    const ve=(mode==="const")?vmax:nextV(st.v,vmax,accel,dt);
+    const ds=0.5*(st.v+ve)*dt;
+    const thMid=st.th+sg*omega*dt*0.5;
+    st.x+=Math.cos(thMid)*ds; st.y+=Math.sin(thMid)*ds;
+    st.th+=sg*omega*dt; st.v=ve; st.t+=dt; st.s+=ds;
+    if(pts) pts.push({x:st.x,y:st.y,th:st.th,v:st.v});
+  }
+}
+
+/* 沿直线推进 len，速度按 a 均匀变（按行程解：v₂² = v₁² ± 2a·ds） */
+function straightStep(pts, st, len, vmax, accel, mode, N){
+  const L=Math.max(0,len);
+  if(mode==="const") st.v=vmax;
+  const n=Math.max(2,N||48), ds=L/n, ct=Math.cos(st.th), sn=Math.sin(st.th);
+  if(L<1e-12){ if(pts) pts.push({x:st.x,y:st.y,th:st.th,v:st.v}); return; }
+  for(let i=0;i<n;i++){
+    let ve, dt;
+    if(mode==="const"){ ve=vmax; dt=ds/Math.max(1e-9,ve); }
+    else{
+      const s=(vmax-st.v)>=0?1:-1;
+      ve=Math.sqrt(Math.max(0, st.v*st.v + s*2*Math.max(0,accel)*ds));
+      if((ve-vmax)*s>0) ve=vmax;
+      dt=2*ds/Math.max(1e-9, st.v+ve);
+    }
+    st.x+=ct*ds; st.y+=sn*ds; st.t+=dt; st.v=ve; st.s+=ds;
+    if(pts) pts.push({x:st.x,y:st.y,th:st.th,v:st.v});
+  }
+}
+
+function alphaRuleOf(s){ return s.alphaRule || "dualphase"; }
+
+/* 变号扫描 + 二分：所有「派生量」都用它，任意 θ₀（含 89° 压转、下降段）统一处理。
+   找不到变号时返回扫描到的最小 |f| 点，而不是端点 —— θ₀>0 时 h₁(α) 是 V 形，
+   取端点会给出毫无意义的 α（曾导致 θ₀=30° 解出 α=0.35° 且图形飞出画面）。
+   M 可调：v6 的 f 求值要积分速度律，扫描点过多会让面板卡顿。 */
+function bisectTarget(fn,lo,hi,it,M){
+  const N=Math.max(24,M||320); let bestX=lo, bestF=Infinity;
+  let prevX=lo, prevF=fn(lo), a=null, b=null;
+  if(isFinite(prevF)&&Math.abs(prevF)<bestF){ bestF=Math.abs(prevF); bestX=lo; }
+  for(let i=1;i<=N;i++){
+    const x=lo+(hi-lo)*i/N, fx=fn(x);
+    if(!isFinite(fx)) continue;
+    if(Math.abs(fx)<bestF){ bestF=Math.abs(fx); bestX=x; }
+    if(a===null && ((prevF<=0&&fx>=0)||(prevF>=0&&fx<=0))){ a=prevX; b=x; }
+    prevX=x; prevF=fx;
+  }
+  if(a===null) return {ok:false,x:bestX};
+  let fa=fn(a), fb=fn(b);
+  if(!isFinite(fa)||!isFinite(fb)) return {ok:false,x:bestX};
+  for(let i=0;i<(it||120);i++){
+    const m=(a+b)/2, fm=fn(m);
+    if(fa*fm<=0){ b=m; } else { a=m; fa=fm; }
+  }
+  return {ok:true,x:(a+b)/2};
+}
+
+/* 给定 α 的爬升三段解（速度随行程变化）。
+   改平弧的入口速度依赖斜直线长度 L，而 L 又依赖改平弧高差 h₂ ⇒ 内层迭代 4 次收敛。 */
+function climbParts(S,k,mode,alpha,N){
+  const n=N||32;
+  const vA=Math.max(1,S.va), vC=Math.max(1,S.vc);
+  const wA=Math.max(1e-6,Math.abs(S.gAsc||0)*k);
+  const wD=omegaDefOf(S,k);
+  const th0=S.theta0||0, dH=S.H-S.h0, v0=Math.max(0,S.v0||0);
+  const pch = dH>=0 ? alpha : -alpha;
+
+  const st={x:0,y:0,th:th0,v:(mode==="const"?vA:v0),t:0,s:0};
+  turnStep(null,st,pch-th0,vA,S.aa,wA,mode,n);
+  const h1=st.y, x1=st.x, v1=st.v, t1=st.t;
+
+  let L=0, h2=0, dx2=0, v2=v1;
+  const snPch=Math.sin(pch);
+  for(let it=0;it<4;it++){
+    const s3={x:0,y:0,th:pch,v:(mode==="const"?vC:v2),t:0,s:0};
+    turnStep(null,s3,-pch,vC,S.ac,wD,mode,n);
+    h2=s3.y; dx2=s3.x;
+    L = Math.abs(snPch)<1e-12 ? 0 : (dH-h1-h2)/snPch;
+    if(mode==="const") break;
+    const Lp=Math.max(0,L), sg=(vA-v1)>=0?1:-1;
+    let vv=Math.sqrt(Math.max(0, v1*v1 + sg*2*Math.max(0,S.aa)*Lp));
+    if((vv-vA)*sg>0) vv=vA;
+    if(!isFinite(vv)) break;
+    if(Math.abs(vv-v2)<1e-6){ v2=vv; break; }
+    v2=vv;
+  }
+  return {pch,h1,x1,v1,t1,h2,dx2,L,v2,th0,dH};
+}
+
+/* 完整爬升解：α 派生 → L → L_asc。
+   R₁（拉起）/ R₂（改平）都是"名义值"（按本段 maxSpeed 算）：
+   实际半径在段内从 v_start/ω 连续长到 v_end/ω，这也正是加速度影响形状的地方。 */
+function climbSolve(S,k,mode){
+  const md = mode || speedModeOf(S);
+  const rule=alphaRuleOf(S), dH=S.H-S.h0;
+  const vA=Math.max(1,S.va), vC=Math.max(1,S.vc);
+  const wA=Math.max(1e-6,Math.abs(S.gAsc||0)*k);
+  const wD=omegaDefOf(S,k);
+  /* 两段转向弧能自己吃掉的最高/最低高度（整个爬升里没有任何直线段时的边界） */
+  const arcH=x=>{ const q=climbParts(S,k,md,x,48);
+    return (!q||!isFinite(q.h1)||!isFinite(q.h2))?NaN:(q.h1+q.h2); };
+  const th0=S.theta0||0;
+  let alpha, solved=true, forced=false, hold=false, why="";
+  const f=x=>{ const p=climbParts(S,k,md,x,48);
+    if(!p||!isFinite(p.h1)||!isFinite(p.h2)) return NaN;
+    return rule==="sym" ? (p.h1+p.h2-dH) : (p.h1-dH/2); };
+  const A_LO=rad(0.35), A_HI=rad(88.5);
+  /* v6.4 实机裁定：ω 偏低时引擎**不会**为了凑 H 反调 α。
+     判据用「按物理给定仰角 α=|θ₀|、L=0 时两段弧实际能爬多高」，与 buildAscent(L=0) 完全同源，
+     不引入第三套参照。若已超过 ΔH ⇒ 相切高度自由超调，禁止再用 f(α)=0 把 α 反解小来抵消。 */
+  const aPhys=clamp(Math.abs(th0),A_LO,A_HI);
+  const qPhys=climbParts(S,k,md,aPhys,48);
+  const yFree=(qPhys&&isFinite(qPhys.h1)&&isFinite(qPhys.h2))?(qPhys.h1+qPhys.h2):NaN;
+  const overFree=dH>0 && isFinite(yFree) && yFree>dH+Math.max(1,Math.abs(dH)*1e-3);
+  if(rule==="manual"){ alpha=clamp(S.alphaRad,rad(0.5),rad(88)); }
+  else if(overFree){
+    alpha=aPhys; solved=true; forced=false; hold=false; why="overshoot";
+  }
+  else{
+    const r=bisectTarget(f,A_LO,A_HI,70,96); alpha=r.x; solved=r.ok;
+    if(r.ok && rule==="sym"){
+      // 正常闭环：两段弧刚好吃掉 ΔH，L=0。若解析闭合给出负 L（弧吃太多），
+      // 用同一方程的最小 α 重解一次（老 forced 分支）。
+      const q=climbParts(S,k,md,alpha,48);
+      if(!q||!isFinite(q.L)||q.L<-1e-6*Math.max(1,Math.abs(dH))){
+        const r2=bisectTarget(f,A_LO,A_HI,70,96);
+        alpha=r2.x; forced=true; solved=r2.ok;
+      }
+    }else if(!r.ok && rule==="sym"){
+      /* 没有根 = 单相位闭环（L=0）在这组参数下不可能。分两种，必须区分：
+         ① 两段弧**爬不到** ΔH（h_arc(88.5°) < ΔH）⇒ 中段必须有 ω=0 的保持段；
+            此时 α 不再是闭合方程的解，改为「保持发射仰角」这个物理默认
+            （导弹没有理由为了爬高再多转一个上仰角）。θ₀ 太浅时退回最陡可行角。
+         ② 两段弧**压不下来**（h_arc(0.35°) > ΔH）⇒ 转得太紧/半径太大，几何不可行。 */
+      const hHi=arcH(A_HI), hLo=arcH(A_LO);
+      if(isFinite(hHi) && hHi<dH){
+        hold=true;
+        alpha = Math.abs(th0)>rad(5) ? Math.min(Math.abs(th0),A_HI) : A_HI;
+        solved=true;
+        why = "hold";
+      }else if(isFinite(hLo) && hLo>dH){
+        solved=false; why = "radiusTooBig";
+        alpha = A_LO;
+      }else{
+        solved=false; why = "noRoot";
+      }
+    }
+  }
+  let p=climbParts(S,k,md,alpha,48);
+  /* why!="" 表示已经分流到「保持段 / 半径太大 / 无根」。此时 α 是物理给定值，
+     不能再被下面的 f2 重解覆盖 —— 否则会把「相切线注定高于 H」的超调硬凑回 H，
+     出现「标了不可行却精确相切」的自相矛盾（v6.2 → v6.3 修）。 */
+  if(!hold && why==="" && rule!=="manual" && (!p||!isFinite(p.L)||p.L<-1e-6*Math.max(1,Math.abs(dH)))){
+    // 该 α 容不下斜直线（改平弧已吃掉全部高差）⇒ 收敛到 L=0 的对称闭环
+    const f2=x=>{ const q=climbParts(S,k,md,x,48);
+      return (!q||!isFinite(q.h1)||!isFinite(q.h2))?NaN:(q.h1+q.h2-dH); };
+    const r2=bisectTarget(f2,A_LO,A_HI,70,96);
+    alpha=r2.x; p=climbParts(S,k,md,alpha,48); forced=true;
+    solved = solved && r2.ok;
+  }
+  const L=Math.max(0, p.L);
+  return {alpha, pch:p.pch, h1:p.h1, h2:p.h2, x1:p.x1, dx2:p.dx2, L, v1:p.v1, v2:p.v2,
+    Lasc:p.x1 + L*Math.cos(p.pch) + p.dx2,
+    rule, solved, forced, hold, why, arcHMax:arcH(A_HI), mode:md,
+    freeTurnH:yFree, omegaRule:(S.omegaRule||"unified"),
+    R1:vA/wA, R2:vC/wD, wA, wD, vA, vC,
+    RaStart:(md==="const"?vA:Math.max(0,S.v0||0))/wA, RaEnd:p.v1/wA};
+}
+
+/* 均匀加/减速跑完 s 的用时（恒速口径的时间参照） */
+function tTravel(s,v0,vmax,a){
+  s=Math.max(0,s); a=Math.max(1e-6,a||1);
+  const dAcc=Math.max(0,(vmax*vmax-v0*v0)/(2*a));
+  if(s<=dAcc) return (Math.sqrt(Math.max(0,v0*v0+2*a*s))-v0)/a;
+  const tAcc=Math.max(0,(vmax-v0)/a);
+  return tAcc + (s-dAcc)/Math.max(1e-6,vmax);
+}
+
+/* ---------- 末段制导 ----------
+   v6.5 实机修正（推翻 v6.4 的「固定下压角」）：超调时引擎**仍在俯冲段 ω 允许范围内
+   尽可能调整俯角**；只要还有剩余高度，水平投影越过目标再折返回来也是允许的。
+   ⇒ 默认 closed：每步朝 atan2(ht−y, D−x) 转（全象限 —— x>D 时目标在后方、俯角>90°，
+     导弹会折返），落点 = 轨迹穿越 y=ht 的位置，可能 < D / ≈D（回抓成功）/ > D。
+   ⇒ fixed：v6.4 旧口径，冻结「按设定 H 算出的下压角」后直线飞，落点必 ≥ D，仅作逐位对照。 */
+
+/* 转向 + 前进同一步（ω 限幅后的 dTheta 与 dt 一起推进）；dTheta=0 时退化为直线小步。 */
+function guidedStep(pts, st, dTheta, dt, vmax, accel, mode){
+  const n=3, sub=dt/n;
+  if(mode==="const") st.v=vmax;
+  for(let i=0;i<n;i++){
+    const ve=(mode==="const")?vmax:nextV(st.v,vmax,accel,sub);
+    const ds=0.5*(st.v+ve)*sub;
+    const thMid=st.th+dTheta*0.5/n;
+    st.x+=Math.cos(thMid)*ds; st.y+=Math.sin(thMid)*ds;
+    st.th+=dTheta/n; st.v=ve; st.t+=sub; st.s+=ds;
+  }
+  if(pts) pts.push({x:st.x,y:st.y,th:st.th,v:st.v});
+}
+
+function shootTerminalClosed(x0,y0,th0,v0,D,ht,vT,accel,omega,mode){
+  const st={x:x0,y:y0,th:th0,v:(mode==="const"?vT:Math.max(0,v0)),t:0,s:0};
+  const pts=[{x:st.x,y:st.y,th:st.th,v:st.v}];
+  const aimAt=(x,y)=>Math.atan2(ht-y,D-x);      // 全象限：x>D ⇒ dx<0 ⇒ 指向后方
+  const wrap=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;};
+  const dt=0.01, maxT=150, turnCap=Math.max(1e-9,omega)*dt;
+  const hitTol=Math.max(1,Math.abs(D)*1e-4);
+  let guard=0, turnArc=0, maxX=st.x, minX=st.x, maxXy=st.y, endX=st.x, endY=st.y;
+  let crossed=false, hit=false, orbit=false;
+  if(st.y<=ht+1e-9){ crossed=true; hit=Math.abs(st.x-D)<=hitTol; }
+  while(!crossed && guard++<20000){
+    if(st.t>maxT){ orbit=true; break; }
+    const prevX=st.x, prevY=st.y;
+    const need=wrap(aimAt(st.x,st.y)-st.th);
+    const dth=clamp(need,-turnCap,turnCap);     // 只在本步 ω 允许的范围内转
+    guidedStep((guard%3===0)?pts:null,st,dth,dt,vT,accel,mode);
+    turnArc+=Math.abs(dth);
+    if(st.x>maxX){ maxX=st.x; maxXy=st.y; }
+    if(st.x<minX) minX=st.x;
+    if(prevY>ht && st.y<=ht){                   // 穿越目标高度线 ⇒ 线性插值落点
+      const u=(prevY-ht)/Math.max(1e-12,prevY-st.y);
+      endX=prevX+(st.x-prevX)*u; endY=ht;
+      crossed=true;
+    }
+  }
+  if(!crossed){ endX=st.x; endY=st.y; }
+  pts.push({x:endX,y:endY,th:st.th,v:st.v});
+  const overshootX=Math.max(0,maxX-D);
+  // 数值步进的量级（≈ v·dt）不算「过冲」：显著性阈值取 20 m 与 0.2%·D 的较大者。
+  const overShowTol=Math.max(20,0.002*Math.abs(D));
+  hit=hit||(crossed&&Math.abs(endX-D)<=hitTol);
+  const recapture=overshootX>overShowTol && Math.abs(endX-D)<=Math.max(hitTol,10);
+  return {pts,splitAt:-1,aligned:!!hit,hit:!!hit,recapture,orbit,maxX,maxXy,minX,
+    overshootX,overShowTol,lineLen:0,aimDeg:Math.abs(deg(wrap(st.th))),turnArc,
+    arcLen:st.s,arcTime:st.t,tLine:0,vEnd:st.v,a:wrap(st.th),endX,endY};
+}
+
+/* v6.4 旧口径（仅对照）：转到预先定死的下压角，随后直线飞到 y=ht，落点必 ≥ D。 */
+function shootTerminalFixed(x0,y0,th0,v0,D,ht,vT,accel,omega,mode,fixedAngle){
+  const st={x:x0,y:y0,th:th0,v:(mode==="const"?vT:Math.max(0,v0)),t:0,s:0};
+  const pts=[{x:st.x,y:st.y,th:st.th}];
+  const turn=Math.sign(fixedAngle-th0)||1;
+  const dStep=0.006, tol=1e-7;
+  let aligned=false, guard=0, turnArc=0;
+  while(guard++<200000){
+    if(st.x>=D-1e-9) break;
+    const need=turn*(fixedAngle-st.th);
+    if(need<=tol){ aligned=true; break; }
+    let d=Math.min(dStep,need);
+    const t1=cloneState(st);
+    turnStep(null,t1,turn*d,vT,accel,omega,mode,3);
+    if(turn*(fixedAngle-t1.th)<0){
+      let lo=0,hi=d;
+      for(let i=0;i<36;i++){
+        const m=(lo+hi)/2, tt=cloneState(st);
+        turnStep(null,tt,turn*m,vT,accel,omega,mode,2);
+        if(turn*(fixedAngle-tt.th)>0) lo=m; else hi=m;
+      }
+      d=(lo+hi)/2;
+    }
+    turnStep(pts,st,turn*d,vT,accel,omega,mode,4);
+    turnArc+=Math.abs(d);
+  }
+  const ok = aligned && st.x<D-1e-9 && isFinite(st.x) && isFinite(st.y);
+  let lineLen=0, aimDeg=NaN, a=0, tLine=0, vEnd=st.v, endX=D;
+  const splitAt=ok?pts.length-1:-1;
+  if(ok){
+    a=fixedAngle; aimDeg=Math.abs(deg(a));
+    const sinA=Math.sin(a);
+    if(Math.abs(sinA)>1e-9){
+      const len=(ht-st.y)/sinA;
+      if(isFinite(len)&&len>0){ lineLen=len; endX=st.x+len*Math.cos(a); }
+    }
+    if(lineLen<=0){ lineLen=Math.hypot(D-st.x,ht-st.y); endX=D; }
+    pts.push({x:endX,y:ht,th:a});
+    const s2=cloneState(st); s2.th=a;
+    straightStep(null,s2,lineLen,vT,accel,mode,24);
+    tLine=s2.t; vEnd=s2.v;
+  }
+  return {pts,splitAt,aligned:ok,hit:ok,recapture:false,orbit:false,
+    maxX:Math.max(D,endX),minX:st.x,overshootX:Math.max(0,endX-D),
+    overShowTol:Math.max(20,0.002*Math.abs(D)),
+    lineLen,aimDeg,turnArc,arcLen:st.s,arcTime:st.t,tLine,vEnd,a,
+    endX,endY:ht};
+}
+
+function shootTerminal(x0,y0,th0,v0,D,ht,vT,accel,omega,mode,opt){
+  const o=opt||{};
+  if(o.rule==="fixed" && isFinite(o.fixedAngle))
+    return shootTerminalFixed(x0,y0,th0,v0,D,ht,vT,accel,omega,mode,o.fixedAngle);
+  return shootTerminalClosed(x0,y0,th0,v0,D,ht,vT,accel,omega,mode);
+}
+
+/* 按真实速度律重建爬升三段几何（细分）。返回点列与关键时刻，供 loftModel 用。 */
+function buildAscent(S,mode,pch,L,vA,vC,wA,wD,h0,th0,v0){
+  const st={x:0,y:h0,th:th0,v:(mode==="const"?vA:v0),t:0,s:0};
+  const up1=[{x:st.x,y:st.y,th:st.th,v:st.v}];
+  turnStep(up1,st,pch-th0,vA,S.aa,wA,mode,220);
+  const p1={x:st.x,y:st.y,th:st.th};
+  const tPullUp=st.t, sPullUp=st.s, vPullEnd=st.v;
+
+  const line=[{x:st.x,y:st.y,th:st.th,v:st.v}];
+  straightStep(line,st,Math.max(0,L),vA,S.aa,mode,80);
+  const p2={x:st.x,y:st.y,th:st.th};
+  const tStraight=st.t, sStraight=st.s, vLineEnd=st.v;
+
+  const up2=[{x:st.x,y:st.y,th:st.th,v:st.v}];
+  turnStep(up2,st,-pch,vC,S.ac,wD,mode,220);
+  const tan={x:st.x,y:st.y,th:st.th};
+  return {up1,line,up2,p1,p2,tan,
+    tPullUp,tStraight,tTangent:st.t,
+    sPullUp,sStraight,sTangent:st.s,
+    vPullEnd,vLineEnd,vAtTan:st.v};
+}
+
+function loftModel(S){
+  const D=Math.max(1,S.D), H=S.H, h0=S.h0, ht=S.ht;
+  const Dt=clamp(S.Dt,0,D), xTerm=D-Dt;
+  const k=Math.max(0.02,S.kOmega||1.5);
+  const mode=speedModeOf(S);
+  const vA=Math.max(1,S.va), vC=Math.max(1,S.vc), vT=Math.max(1,S.vt);
+  const wA=Math.max(1e-6,Math.abs(S.gAsc||0)*k);
+  const wD=omegaDefOf(S,k);
+  const wT=Math.max(1e-6,Math.abs(S.gTrm||0)*k);
+  const v0=Math.max(0,S.v0||0);
+  const th0=S.theta0||0, dH=H-h0;
+  const budget=D-Dt;
+  // 只有 H<=0 / dH=0 / Dt=0 / 显式 flat 才是平直；
+  // 用 dH<=0 判定会把「发射点高于巡航高度」误判成平直，使 sig=-1 的下降段成为死分支。
+  const flat=!!S.flat || H<=0 || dH===0 || Dt<=0;
+  const segs=[], marks=[], ghosts=[];
+  const diag={early:false,climbInfeasible:false,alignFail:false,tangentErr:0,earlyBy:0,
+    alphaForced:false,climbBeyondRange:false,straightLen:0,pitchOver:false,
+    alphaRule:alphaRuleOf(S),alphaDeg:0,h1:0,h2:0,arcOverBudget:false,
+    speedMode:mode,vLaunch:v0,vPullEnd:0,vAtTan:0,vTermEnd:0,shortOfSpeed:false,
+    accelShape:false,hold:false,why:"",arcHMax:0,maxTurnH:0,
+    overshoot:0,cruiseActual:0,freeTurnH:0,omegaRule:"unified",
+    impactX:NaN,overshootHit:0,fixedDownDeg:NaN,
+    termRule:"closed",impactHit:false,recapture:false,orbit:false,overshootX:0,overShowTol:0};
+
+  /* --- 平直弹道（H=0 或 Dt=0） --- */
+  if(flat){
+    const len=Math.hypot(D,ht-h0), th=Math.atan2(ht-h0,D), pts=[];
+    for(let i=0;i<=120;i++){ const u=i/120; pts.push({x:D*u,y:h0+(ht-h0)*u,th}); }
+    segs.push({id:"flat",color:"#8892a4",w:3.2,pts});
+    marks.push({x:0,y:h0,label:"发射",color:"#e6e9ef"});
+    marks.push({x:D,y:ht,label:"命中",color:"#ef6b73"});
+    const T=tTravel(len,v0,vC,S.ac);
+    return {D,Dt,xTerm,budget,flat:true,segs,marks,ghosts,diag,
+      Lasc:0,Lcruise:len,alphaDeg:0,Rasc:vA/wA,Rtrm:vT/wT,Rdef:vC/wD,
+      RascStart:v0/wA,RascEnd:v0/wA,RdefStart:vC/wD,RdefEnd:vC/wD,
+      straightLen:0,straightRatio:0,pullUpEnd:null,switchPt:null,tangentPt:null,
+      alignPt:null,impactDeg:Math.abs(deg(th)),T,Tconst:len/vC,peak:Math.max(h0,ht),
+      minY:Math.min(h0,ht),maxY:Math.max(h0,ht),H,
+      tPullUp:0,tStraight:0,tTangent:0,sPullUp:0,sStraight:0,sTangent:0,
+      vPullEnd:0,vAtTan:0,needK:null,Hmax:NaN};
+  }
+
+  /* --- 爬升：拉起弧(va,aa) → 斜直线 → 改平弧(vc,ac)，末端与 y=H 相切 --- */
+  const cs=climbSolve(S,k,mode);
+  const alpha=cs.alpha, pch=cs.pch, Lstraight=cs.L;
+  diag.climbInfeasible=!cs.solved;
+  diag.alphaForced=cs.forced;
+  diag.hold=!!cs.hold;
+  diag.why=cs.why||"";
+  diag.arcHMax=cs.arcHMax;
+  diag.freeTurnH=cs.freeTurnH;
+  diag.omegaRule=cs.omegaRule;
+  diag.straightLen=Lstraight;
+  diag.alphaRule=cs.rule;
+  diag.alphaDeg=deg(alpha);
+  diag.pitchOver=Math.abs(deg(th0))>75;
+  diag.h1=cs.h1; diag.h2=cs.h2;
+  diag.arcOverBudget=(cs.h1>Math.abs(dH)+1e-6)||(Math.abs(cs.h1)+Math.abs(cs.h2)>2*Math.abs(dH)+1e-6);
+  diag.accelShape = mode==="accel";
+  // 连续转（不 hold）从 θ₀ 一路压到 0° 能爬多高 —— 用来判定「保持段是不是几何上必须的」
+  {
+    const mt={x:0,y:0,th:th0,v:(mode==="const"?vA:v0),t:0,s:0};
+    if(Math.abs(th0)>1e-9) turnStep(null,mt,-th0,vA,S.aa,wA,mode,600);
+    diag.maxTurnH=mt.y;
+  }
+
+  // 分段重建（细分，用真实速度律）。L 再按「实测末端高差」重解，让相切严格成立。
+  // 注意：不能用牛顿法。L 变长不但抬高直线本身，还会抬高**改平弧的入口速度**，
+  // 使 h₂ 一起变大 ⇒ 真导数 = sin α + dh₂/dL，远大于 sin α。用 sin α 做步长会过冲、
+  // 甚至正反馈发散（曾留下 72 m 相切残差）。改为对 L 二分：y(L) 对 L 严格单调，
+  // 二分必然收敛，且不会越界。
+  const yOf=L=>buildAscent(S,mode,pch,Math.max(0,L),vA,vC,wA,wD,h0,th0,v0).tan.y;
+  const sn=Math.sin(pch);
+  let Lbuild=Math.max(0,Lstraight);
+  if(Math.abs(sn)>1e-6){
+    const errOf=L=>sn*(yOf(L)-H);            // 对 L 单调递增（d/dL = sn² > 0）
+    if(errOf(0)>=0){ Lbuild=0; }
+    else{
+      let hi=Math.max(1,Lbuild*2+10), guard=0;
+      while(errOf(hi)<0 && guard++<48) hi*=1.65;
+      if(errOf(hi)>=0){
+        let lo=0;
+        for(let i=0;i<60;i++){ const mid=(lo+hi)/2; if(errOf(mid)<0) lo=mid; else hi=mid; }
+        Lbuild=(lo+hi)/2;
+      }
+    }
+  }
+  let g=buildAscent(S,mode,pch,Lbuild,vA,vC,wA,wD,h0,th0,v0);
+  const up1=g.up1, line=g.line, up2=g.up2;
+  const p1=g.p1, p2=g.p2, tan=g.tan;
+  const tPullUp=g.tPullUp, tStraight=g.tStraight, tTangent=g.tTangent;
+  const sPullUp=g.sPullUp, sStraight=g.sStraight, sTangent=g.sTangent;
+  const vPullEnd=g.vPullEnd, vAtTan=g.vAtTan;
+  const Lasc=tan.x;
+  diag.tangentErr=tan.y-H;
+  /* 实际相切线可以高于设定巡航线：ω 过低 ⇒ R=v/ω 太大 ⇒ 压到水平前就已冲过 H。
+     这时不能再把平飞/末段钉在 y=H，否则图上会出现垂直断口，且超调不会传导到末段。 */
+  diag.overshoot=Math.max(0,tan.y-H);
+  diag.cruiseActual=tan.y;
+  diag.vPullEnd=vPullEnd; diag.vAtTan=vAtTan;
+  diag.shortOfSpeed = mode==="accel" && vAtTan < 0.995*vA;
+  diag.straightLen=Lbuild;
+
+  segs.push({id:"up1",color:"#f0b429",w:3.4,pts:up1});
+  segs.push({id:"straight",color:"#54c08a",w:3.4,pts:line});
+  segs.push({id:"up2",color:"#ffd479",w:3.4,pts:up2});
+  marks.push({x:0,y:h0,label:"发射 θ₀="+fmt(deg(th0),0)+"°",color:"#e6e9ef"});
+  if(Lbuild>1){
+    const noPull = Math.abs(cs.h1)<1e-6 && p1.x<1e-6;
+    marks.push({x:p1.x,y:p1.y,
+      label:(noPull?"保持 θ₀ · 进入斜直线":(pch<th0-1e-9?"压转结束 · 进入斜直线":"拉起结束 · 进入斜直线")),
+      color:"#54c08a"});
+    marks.push({x:p2.x,y:p2.y,label:"开始改平",color:"#ffd479"});
+  }else{
+    marks.push({x:p2.x,y:p2.y,
+      label:(diag.overshoot>0.5?"压转到底 · 实际相切（超调 +"+fmt(diag.overshoot,0)+" m）":"拉起 = 改平 = 相切（L=0）"),
+      color:diag.overshoot>0.5?"#ef6b73":"#54c08a"});
+  }
+  if(Lbuild>1) marks.push({x:tan.x,y:tan.y,label:"相切 θ=0",color:"#f0b429"});
+
+  /* --- 平飞（余数段）或早触发 --- */
+  let startX,startY,startTh,Lcruise=0,vEntry=vAtTan,tCruise=0;
+  const tol=Math.max(1e-6,Math.abs(budget)*1e-4);
+  if(xTerm>=Lasc-tol){
+    Lcruise=Math.max(0,xTerm-Lasc);
+    if(Lcruise>1e-6){
+      const cr=[{x:Lasc,y:tan.y,th:0,v:vAtTan}];
+      const s2={x:Lasc,y:tan.y,th:0,v:(mode==="const"?vC:vAtTan),t:0,s:0};
+      straightStep(cr,s2,Lcruise,vC,S.ac,mode,60);
+      segs.push({id:"cruise",color:"#5b9dff",w:3.4,pts:cr});
+      vEntry=s2.v; tCruise=s2.t;
+    }
+    startX=Math.max(xTerm,Lasc); startY=tan.y; startTh=0;
+  }else{
+    diag.early=true; diag.earlyBy=Lasc-xTerm;
+    const allUp=up1.concat(line.slice(1),up2.slice(1));
+    let P=allUp[allUp.length-1];
+    for(let i=0;i<allUp.length-1;i++){
+      const a=allUp[i], b=allUp[i+1];
+      if(a.x<=xTerm && b.x>=xTerm){
+        const u=(xTerm-a.x)/Math.max(1e-9,b.x-a.x);
+        P={x:xTerm,y:a.y+(b.y-a.y)*u,th:a.th+(b.th-a.th)*u,
+           v:(a.v===undefined?undefined:a.v+(b.v-a.v)*u)};
+        break;
+      }
+    }
+    startX=P.x; startY=P.y; startTh=P.th;
+    if(isFinite(P.v)) vEntry=P.v;
+    ghosts.push({color:"#f0b429",pts:allUp.filter(q=>q.x>=xTerm)});
+    segs.forEach(sg=>{
+      if(sg.id==="up1"||sg.id==="straight"||sg.id==="up2")
+        sg.pts=sg.pts.filter(q=>q.x<=xTerm+1e-9);
+    });
+    const kept=marks.filter(m=>m.x<=xTerm+1e-9);
+    marks.length=0; kept.forEach(m=>marks.push(m));
+    marks.push({x:xTerm,y:P.y,label:"末段触发（爬升未完成）",color:"#ef6b73"});
+  }
+
+  /* --- 末段：Dt 触发 → 闭环追踪（默认）／固定下压角（v6.4 旧口径，仅对照） --- */
+  const termRule=terminalRuleOf(S);
+  // fixed 旧口径：超调时下压角按「设定 H」预先定死、落点必 ≥ D；closed 不再冻结，逐步修正俯角。
+  const fixedA = (termRule==="fixed" && diag.overshoot>0.5) ? Math.atan2(ht-H,Math.max(1,Dt)) : undefined;
+  const trm=shootTerminal(startX,startY,startTh,vEntry,D,ht,vT,S.at,wT,mode,{rule:termRule,fixedAngle:fixedA});
+  diag.termRule=termRule;
+  diag.impactX=trm.endX;
+  diag.impactHit=!!trm.hit;
+  diag.recapture=!!trm.recapture;
+  diag.orbit=!!trm.orbit;
+  diag.overshootX=Math.max(0,trm.maxX-D);
+  diag.overShowTol=trm.overShowTol||0;
+  diag.overshootHit=Math.max(0,trm.endX-D);
+  if(fixedA!==undefined) diag.fixedDownDeg=Math.abs(deg(fixedA));
+  diag.alignFail=!trm.aligned;
+  diag.vTermEnd=trm.vEnd;
+  const termPts=trm.pts;
+  if(termPts.length>1) segs.push({id:"term1",color:"#ef6b73",w:3.4,pts:termPts});
+  if(trm.splitAt>=0 && trm.splitAt<termPts.length-1){
+    segs.push({id:"term2",color:"#ff9c9c",w:3.4,pts:termPts.slice(trm.splitAt)});
+    marks.push({x:termPts[trm.splitAt].x,y:termPts[trm.splitAt].y,label:"方向对准",color:"#ff9c9c"});
+  }
+  if(diag.overshootX>diag.overShowTol)
+    marks.push({x:trm.maxX,y:trm.maxXy,label:"最远点 · 越过 D "+fmt(diag.overshootX,0)+" m",color:"#f0b429"});
+  {
+    const last=termPts[termPts.length-1];
+    const dev=trm.endX-D;
+    marks.push({x:last.x,y:last.y,
+      label: (trm.hit ? (diag.overshootX>diag.overShowTol?("回抓命中 · 最远超 D "+fmt(diag.overshootX,0)+" m"):"命中")
+                      : (trm.orbit?"末段落空 · 未穿越目标高度线"
+                                 :("落点 · 偏差 "+(dev>=0?"+":"−")+fmt(Math.abs(dev),0)+" m"))),
+      color:"#ef6b73"});
+  }
+
+  const all=segs.reduce((acc,s)=>acc.concat(s.pts),[]);
+  let peak=-Infinity,minY=Infinity,maxY=-Infinity;
+  all.forEach(p=>{ peak=Math.max(peak,p.y); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); });
+  // 本模型时间 = 三段爬升 + 平飞 + 末段（各段按自己的加速度律积分）
+  const T=tTangent + tCruise + trm.arcTime + trm.tLine;
+  // 恒速参照：整段都按各相 maxSpeed 飞（v5 口径，仅作对比）
+  const Tconst=sTangent/vA + Lcruise/vC + (trm.arcLen+trm.lineLen)/vT;
+
+  const xMax=Math.max(D, isFinite(diag.impactX)?diag.impactX:D,
+    isFinite(trm.maxX)?trm.maxX:D);
+  return {D,Dt,xTerm,xMax,budget,flat:false,segs,marks,ghosts,diag,
+    Lasc,Lcruise,alphaDeg:Math.abs(deg(alpha)),pitchDeg:deg(pch),
+    Rasc:cs.R1,Rtrm:vT/wT,Rdef:cs.R2,RascStart:cs.RaStart,RascEnd:cs.RaEnd,
+    RdefStart:(mode==="const"?vC:g.vLineEnd)/wD, RdefEnd:vAtTan/wD,
+    straightLen:Lbuild,straightRatio:Lasc>0?Lbuild/Lasc:0,
+    pullUpEnd:p1,switchPt:p2,tangentPt:tan,
+    alignPt:(trm.splitAt>=0?termPts[trm.splitAt]:null),
+    impactDeg:trm.aligned?trm.aimDeg:NaN,T,Tconst,peak,minY,maxY,H,maxX:trm.maxX,
+    tPullUp,tStraight,tTangent,sPullUp,sStraight,sTangent,
+    vPullEnd,vAtTan,vTermEnd:trm.vEnd,needK:null,Hmax:NaN};
+}
+
+/* 反解 k：让爬升段水平长度恰好等于 budget（D − Dt）。
+   α 与速度律都随 k 变 ⇒ 只能一维数值求根。 */
+function solveK(S){
+  const mode=speedModeOf(S);
+  const budget=Math.max(1,S.D-clamp(S.Dt,0,S.D));
+  const test=k=>{
+    const r=climbSolve(S,k,mode);
+    return isFinite(r.Lasc)&&r.Lasc>0 ? r.Lasc : NaN;
+  };
+  let lo=0.05, hi=60;
+  const Llo=test(lo), Lhi=test(hi);
+  if(!isFinite(Llo)) return {ok:false,reason:"k 下界已不可行"};
+  if(Llo<budget) return {ok:false,reason:"即使 ω 很小，爬升也比预算长 —— 需降低 H 或提高 D−Dt"};
+  if(isFinite(Lhi)&&Lhi>budget) return {ok:false,reason:"即使 ω 很大，爬升仍短于预算 —— 需提高 H 或降低 D−Dt"};
+  for(let i=0;i<80;i++){
+    const mid=(lo+hi)/2, Lm=test(mid);
+    // k 增大 ⇒ R 减小 ⇒ L_asc 减小
+    if(!isFinite(Lm)||Lm>budget) lo=mid; else hi=mid;
+  }
+  const k=(lo+hi)/2, r=climbSolve(S,k,mode);
+  // 交叉校验：解出来的几何必须自己站得住。曾出现过「α 被钉在搜索上界、相切差几公里，
+  // 却仍然返回 ok:true」的假解 —— 这里用「闭环是否真的成立」把它挡掉。
+  if(!r.solved)
+    return {ok:false,k,reason:"该 k 下爬升闭环无解（α 无从派生）—— 见下方告警"};
+  const chk=loftModel(Object.assign({},S,{kOmega:k}));
+  const tolH=Math.max(0.5,Math.abs(S.H-S.h0)*2e-3);
+  if(Math.abs(chk.diag.tangentErr)>tolH)
+    return {ok:false,k,reason:(chk.diag.overshoot>0.5?"该 k 下巡航高度超调 ":"该 k 下相切残差 ")+
+      fmt(Math.abs(chk.diag.tangentErr),1)+" m（> "+fmt(tolH,1)+" m）—— 闭环不成立"};
+  return {ok:true,k,L:r.L,Lasc:r.Lasc,alpha:r.alpha,R1:r.R1,mode,hold:!!r.hold};
+}
+
+/* ---------- 参数面板 ---------- */
+function buildParams(){
+  const host=$("params"); host.innerHTML="";
+  GROUPS.forEach(g=>{
+    const det=document.createElement("details");
+    det.className="group"; det.open=!!g.open;
+    const sum=document.createElement("summary"); sum.textContent=g.title; det.appendChild(sum);
+    g.items.forEach(it=>{
+      const row=document.createElement("div"); row.className="row";
+      if(it.type==="display"){
+        row.innerHTML='<div class="lab"><span>'+it.n+'</span><span class="num"></span></div>'+
+          '<div class="fld">'+it.f+'</div>'+
+          '<div class="ctl" style="flex-wrap:wrap">'+
+            '<label style="font-size:11.5px;color:var(--mut);display:flex;gap:5px;align-items:center">'+
+              '<input type="checkbox" id="autoZoom"> 纵向自动放大</label>'+
+            '<button id="btnOneToOne" class="mini" title="纵向与横向同比例，看真实扁平程度">1:1 等比例</button>'+
+          '</div>';
+        det.appendChild(row);
+        return;
+      }
+      if(it.type==="select"){
+        row.innerHTML='<div class="lab"><span>'+it.n+'</span><span class="num" id="num_'+it.k+'"></span></div>'+
+          '<div class="fld">'+it.f+'</div>'+
+          '<div class="ctl"><select id="s_'+it.k+'">'+
+          it.options.map(o=>'<option value="'+o[0]+'">'+esc(o[1])+'</option>').join("")+'</select></div>';
+        det.appendChild(row);
+        row.querySelector("#s_"+it.k).addEventListener("change",e=>{
+          S[it.k]=e.target.value; markCustom(); render();
+        });
+        return;
+      }
+      row.innerHTML=
+        '<div class="lab"><span>'+it.n+'</span><span class="num" id="num_'+it.k+'"></span></div>'+
+        '<div class="fld">'+it.f+'</div>'+
+        '<div class="ctl"><input type="range" id="r_'+it.k+'" min="'+it.min+'" max="'+it.max+'" step="'+it.step+'">'+
+        '<input type="number" id="i_'+it.k+'" min="'+it.min+'" max="'+it.max+'" step="'+it.step+'">'+
+        '<span class="u">'+it.u+'</span></div>';
+      det.appendChild(row);
+      const r=row.querySelector("#r_"+it.k), i=row.querySelector("#i_"+it.k);
+      r.addEventListener("input",()=>{ S[it.k]=parseFloat(r.value); i.value=r.value; markCustom(); render(); });
+      i.addEventListener("change",()=>{
+        let v=parseFloat(i.value); if(!isFinite(v)) v=S[it.k];
+        v=clamp(v,it.min,it.max); S[it.k]=v; i.value=v; r.value=v; markCustom(); render();
+      });
+    });
+    host.appendChild(det);
+  });
+  syncInputs();
+}
+function syncInputs(){
+  GROUPS.forEach(g=>g.items.forEach(it=>{
+    if(it.type==="display") return;
+    const v=S[it.k];
+    if(it.type==="select"){
+      const el=$("s_"+it.k); if(el) el.value=v;
+      const n=$("num_"+it.k); if(n) n.textContent="";
+      return;
+    }
+    const r=$("r_"+it.k), i=$("i_"+it.k);
+    if(r) r.value=v; if(i) i.value=v;
+    const n=$("num_"+it.k);
+    if(!n) return;
+    if(it.ang){
+      // 蓝字：弧度原值 + 度数换算（NDF 用弧度，人读度数）
+      n.textContent=fmt(v,4)+" rad · "+fmt(deg(v),1)+"°";
+    }else{
+      n.textContent=fmt(v,it.step<1?2:0)+(it.u?" "+it.u:"");
+    }
+  }));
+  $("r_zoom").disabled=autoZoom; $("i_zoom").disabled=autoZoom;
+  const manual=alphaRuleOf(S)==="manual";
+  if($("r_alphaRad")) $("r_alphaRad").disabled=!manual;
+  if($("i_alphaRad")) $("i_alphaRad").disabled=!manual;
+  const nd=$("num_alphaRad");
+  if(nd && !manual) nd.textContent="由算法派生";
+}
+function markCustom(){
+  if(currentPreset!=="custom"){ currentPreset="custom"; $("preset").value="custom"; }
+  S.flat=false;
+}
+
+/* ---------- 显示参数 ---------- */
+function compute(){
+  const L=loftModel(S);
+  const W=960,Hh=460,padL=74,padR=26,padT=26,padB=52;
+  const plotW=W-padL-padR, plotH=Hh-padT-padB;
+  const span=Math.max(1,(L.maxY-L.minY)*1.25,Math.abs(L.H)*0.5);
+  // v6.4：超调 + 固定下压角会把命中点推到 D 之后，横轴必须跟着扩展，否则落点被裁出图。
+  L.xMax=Math.max(L.D,L.xMax||L.D);
+  const s=plotW/L.xMax;
+  const autoZ=clamp(plotH*0.78/(span*s),1,60);
+  const zoom=autoZoom?autoZ:clamp(S.zoom,1,60);
+  L.minH=Math.min(0,L.minY)-Math.max(10,Math.abs(L.H)*0.08);
+  // 不可行时轨迹会冲到巡航高度之上很多；夹住纵轴范围以免整图缩成一条线（路径本就被裁剪）。
+  // v6.3：超调是真实物理结果，纵轴至少要容纳它，否则「相切线高于巡航线」在图上根本看不见。
+  const over=Math.max(0,L.diag.overshoot||0);
+  const capH=L.flat?L.maxY:Math.max(L.H*2.2,L.H+200,
+    (L.H+Math.min(over,Math.max(200,Math.abs(L.H)*5)))*1.06);
+  L.maxH=Math.min(L.maxY,capH)+Math.max(10,Math.abs(L.H)*0.16);
+  L.W=W; L.Hh=Hh; L.padL=padL; L.padT=padT; L.plotW=plotW; L.plotH=plotH;
+  L.s=s; L.zoom=zoom; L.sy=s*zoom;
+  if(L.flat){ L.shape="flat"; L.shapeText="平直（不进入曲率模型）"; }
+  else if(L.diag.overshoot>0.5){ L.shape="bad"; L.shapeText="巡航高度超调 +"+fmt(L.diag.overshoot,0)+" m"; }
+  else if(L.diag.climbInfeasible||L.diag.alignFail||L.diag.climbBeyondRange){ L.shape="bad"; L.shapeText="参数不可行 · 见告警"; }
+  else if(L.diag.early){ L.shape="attn"; L.shapeText="早触发 · 尺度待定标"; }
+  else if(L.Lcruise>0.5){ L.shape="trap"; L.shapeText="梯形（有平飞平台）"; }
+  else { L.shape="arch"; L.shapeText="拱形（无平台段）"; }
+  return L;
+}
+
+/* ---------- 绘图 ---------- */
+function draw(M){
+  const {W,Hh,padL,padT,plotW,plotH,minH,maxH,sy,D}=M;
+  const xMax=M.xMax||D;
+  const X=x=>padL+x*plotW/xMax, Y=h=>padT+plotH-(h-minH)*sy;
+  let o=[];
+  o.push('<defs><clipPath id="clip"><rect x="'+padL+'" y="'+padT+'" width="'+plotW+'" height="'+plotH+'"/></clipPath></defs>');
+  o.push('<rect x="0" y="0" width="'+W+'" height="'+Hh+'" fill="#1d212a"/>');
+  o.push('<rect x="'+padL+'" y="'+padT+'" width="'+plotW+'" height="'+plotH+'" fill="#151820" stroke="#2a2f3a"/>');
+  for(let i=0;i<=5;i++){
+    const hv=minH+(maxH-minH)*i/5, y=Y(hv);
+    if(y<padT-1||y>padT+plotH+1) continue;
+    o.push('<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(padL+plotW)+'" y2="'+y.toFixed(1)+'" stroke="#262c37" stroke-width="1"/>');
+    o.push('<text x="'+(padL-9)+'" y="'+(y+4).toFixed(1)+'" fill="#7b8596" font-size="11" text-anchor="end">'+fmt(hv,0)+'</text>');
+  }
+  for(let i=0;i<=6;i++){
+    const xv=xMax*i/6, x=X(xv);
+    o.push('<line x1="'+x.toFixed(1)+'" y1="'+padT+'" x2="'+x.toFixed(1)+'" y2="'+(padT+plotH)+'" stroke="#222833" stroke-width="1"/>');
+    o.push('<text x="'+x.toFixed(1)+'" y="'+(padT+plotH+18)+'" fill="#7b8596" font-size="11" text-anchor="middle">'+fmt(xv,0)+'</text>');
+  }
+  o.push('<text x="'+(padL+plotW/2)+'" y="'+(Hh-9)+'" fill="#98a2b3" font-size="11" text-anchor="middle">水平距离 (m / GRU)</text>');
+  o.push('<text x="14" y="'+(padT+plotH/2)+'" fill="#98a2b3" font-size="11" text-anchor="middle" transform="rotate(-90 14 '+(padT+plotH/2)+')">高度 (m / GRU)</text>');
+  const yg=Y(0);
+  if(yg>=padT&&yg<=padT+plotH){
+    o.push('<line x1="'+padL+'" y1="'+yg.toFixed(1)+'" x2="'+(padL+plotW)+'" y2="'+yg.toFixed(1)+'" stroke="#4a5262" stroke-width="1.5"/>');
+    o.push('<text x="'+(padL+plotW-6)+'" y="'+(yg-6).toFixed(1)+'" fill="#6b7484" font-size="10" text-anchor="end">地面 h=0</text>');
+  }
+  if(S.H>0){
+    const yc=Y(S.H);
+    if(yc>=padT&&yc<=padT+plotH){
+      o.push('<line x1="'+padL+'" y1="'+yc.toFixed(1)+'" x2="'+(padL+plotW)+'" y2="'+yc.toFixed(1)+
+        '" stroke="#f0b429" stroke-width="1" stroke-dasharray="6 5" opacity="0.5"/>');
+      o.push('<text x="'+(padL+8)+'" y="'+(yc-7).toFixed(1)+'" fill="#f0b429" font-size="11">CruiseAltitudeGRU = '+fmt(S.H,0)+'（相切目标线）</text>');
+    }
+  }
+  if(!M.flat&&M.xTerm>0&&M.xTerm<D){
+    const xt=X(M.xTerm);
+    o.push('<line x1="'+xt.toFixed(1)+'" y1="'+padT+'" x2="'+xt.toFixed(1)+'" y2="'+(padT+plotH)+
+      '" stroke="#ef6b73" stroke-width="1" stroke-dasharray="5 5" opacity="0.6"/>');
+    o.push('<text x="'+(xt+5).toFixed(1)+'" y="'+(padT+15)+'" fill="#ef6b73" font-size="10.5">末段触发 · 剩余 Dt='+fmt(M.Dt,0)+'</text>');
+  }
+  if(!M.flat && (M.diag.overshootX>M.diag.overShowTol ||
+                 Math.abs((isFinite(M.diag.impactX)?M.diag.impactX:M.D)-M.D)>1)){
+    const xd=X(M.D);
+    o.push('<line x1="'+xd.toFixed(1)+'" y1="'+padT+'" x2="'+xd.toFixed(1)+'" y2="'+(padT+plotH)+
+      '" stroke="#ef6b73" stroke-width="1" stroke-dasharray="2 4" opacity="0.5"/>');
+    o.push('<text x="'+(xd-5).toFixed(1)+'" y="'+(padT+plotH-8)+'" fill="#ef6b73" font-size="10" text-anchor="end">设定目标 D='+fmt(M.D,0)+'</text>');
+  }
+  // 理论爬升（早触发时的对照虚线）
+  M.ghosts.forEach(g=>{
+    if(g.pts.length<2) return;
+    let d=""; g.pts.forEach((p,i)=>{ d+=(i?" L ":"M ")+X(p.x).toFixed(2)+" "+Y(p.y).toFixed(2); });
+    o.push('<path d="'+d+'" fill="none" stroke="'+g.color+'" stroke-width="1.6" stroke-dasharray="4 5" opacity="0.5" clip-path="url(#clip)"/>');
+  });
+  // 分段轨迹
+  M.segs.forEach(sg=>{
+    if(sg.pts.length<2) return;
+    let d=""; sg.pts.forEach((p,i)=>{ d+=(i?" L ":"M ")+X(p.x).toFixed(2)+" "+Y(p.y).toFixed(2); });
+    o.push('<path d="'+d+'" fill="none" stroke="'+sg.color+'" stroke-width="'+sg.w+
+      '" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#clip)"/>');
+  });
+  // 相切点处画水平切线，强调 θ=0
+  if(M.tangentPt && !M.diag.early && isFinite(M.tangentPt.x)){
+    const px=X(M.tangentPt.x),py=Y(M.tangentPt.y);
+    o.push('<line x1="'+(px-42).toFixed(1)+'" y1="'+py.toFixed(1)+'" x2="'+(px+42).toFixed(1)+'" y2="'+py.toFixed(1)+
+      '" stroke="#f0b429" stroke-width="1" stroke-dasharray="3 3" opacity="0.8"/>');
+  }
+  // 关键点
+  const dot=(m,dy)=>{
+    const px=X(m.x),py=Y(m.y);
+    return '<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="4.2" fill="'+m.color+'" stroke="#151820" stroke-width="1.5"/>'+
+      '<text x="'+px.toFixed(1)+'" y="'+(py+dy).toFixed(1)+'" fill="'+m.color+'" font-size="10" text-anchor="middle">'+esc(m.label)+'</text>';
+  };
+  M.marks.forEach((m,i)=>o.push(dot(m,i%2?-11:19)));
+  const is1to1=Math.abs(M.zoom-1)<1e-9;
+  o.push('<rect x="'+(W-212)+'" y="'+(Hh-38)+'" width="196" height="26" rx="4" fill="'+
+    (is1to1?"#15251d":"#241d17")+'" stroke="'+(is1to1?"#2f5a44":"#5a3d28")+'"/>');
+  o.push('<text x="'+(W-114)+'" y="'+(Hh-20)+'" fill="'+(is1to1?"#7fd6a2":"#ff9f68")+
+    '" font-size="11" text-anchor="middle">'+(is1to1?"1:1 等比例（未放大）":"纵向放大 ×"+fmt(M.zoom,1)+"（非等比例）")+'</text>');
+  $("chart").innerHTML=o.join("");
+  $("zoomLabel").textContent = (!autoZoom && Math.abs(M.zoom-1)<1e-9)
+    ? "1:1 等比例（纵向 ×1.0）"
+    : "纵向 ×"+fmt(M.zoom,1)+(autoZoom?"（自动）":"（手动）");
+  const tag=$("shapeTag"); tag.className="shape-tag shape-"+M.shape; tag.textContent=M.shapeText;
+}
+
+/* ---------- 指标与提示 ---------- */
+function renderInfo(M){
+  const rn=M.diag.alphaRule||"sym";
+  const ruleName=rn==="sym"?"单相位闭环（L=0）":(rn==="manual"?"手动 α（对照）":"双相位闭环（v4/v5 旧规则）");
+  const constMode=M.diag.speedMode==="const";
+  const noPull=Math.abs(M.diag.h1)<1e-6;
+  const cards=[
+    ["爬升段长度 L_asc（导出）",fmt(M.Lasc,0),"m","拉起弧 + 斜直线 + 改平弧",""],
+    ["爬升仰角 α ★（派生）",fmt(M.alphaDeg,1),"°",
+      M.diag.why==="overshoot"?"自由超调工况 · α = θ₀（不反解）":
+        (M.diag.hold?("无 L=0 解 · 保持 θ₀ 的保持段闭环"):(ruleName+" · 由速度律与 R 解出")),
+      M.diag.climbInfeasible?" bad":(M.diag.alphaForced||M.diag.hold?" attn":"")],
+    ["斜直线段 L（R = ∞）",fmt(M.straightLen,1),"m",
+      M.straightLen>1?("占爬升 "+fmt(M.straightRatio*100,0)+"% · ω=0，不是圆弧"):"没有直线段",
+      M.straightLen>1?" attn":""],
+    ["平飞段（余数）",fmt(M.Lcruise,0),"m","D − Dt − L_asc",""],
+    ["拉起弧 R 起 → 止",noPull?"—":(fmt(M.RascStart,0)+" → "+fmt(M.RascEnd,0)),noPull?"":"m",
+      noPull?"无拉起弧（直接保持 θ₀）":(constMode?"恒速口径：R 固定":"R = v/ω，随 v 单调增"),""],
+    ["改平弧 R 起 → 止 ★",fmt(M.RdefStart,0)+" → "+fmt(M.RdefEnd,0),"m",
+      "相切处最大；这段才是“越往上越平”",""],
+    ["相切点 x / 误差",M.tangentPt?fmt(M.tangentPt.x,0):"—","m",
+      M.tangentPt?("Δh = "+fmt(M.diag.tangentErr,3)+" m"):"—",
+      (M.diag.climbInfeasible||M.diag.overshoot>0.5)?" bad":""],
+    ["实际巡航 / 设定 H ★",fmt(M.diag.cruiseActual||M.H,0)+" / "+fmt(M.H,0),"m",
+      M.diag.overshoot>0.5?("超调 +"+fmt(M.diag.overshoot,0)+" m ⇒ 末段从更高处下压"):"严格相切，无超调",
+      M.diag.overshoot>0.5?" bad":""],
+    ["落点 / 设定目标 D ★",fmt(isFinite(M.diag.impactX)?M.diag.impactX:M.D,0)+" / "+fmt(M.D,0),"m",
+      M.diag.impactHit
+        ? (M.diag.recapture?("回抓命中 · 最远超 D "+fmt(M.diag.overshootX,0)+" m"):"命中目标")
+        : (M.diag.orbit?"末段落空（未穿越目标高度线）"
+                       :("落点偏差 "+(M.diag.impactX>=M.D?"+":"−")+fmt(Math.abs(M.diag.impactX-M.D),0)+" m")),
+      M.diag.impactHit?(M.diag.recapture?" attn":""):" bad"],
+    ["最远点 / 越过目标 D ★",fmt(isFinite(M.maxX)?M.maxX:M.D,0)+" / "+fmt(M.D,0),"m",
+      M.diag.overshootX>M.diag.overShowTol?("水平投影越过目标 "+fmt(M.diag.overshootX,0)+" m"+(M.diag.recapture?"，随后折返命中":"，未折返")):"未越过目标",
+      M.diag.overshootX>M.diag.overShowTol?(M.diag.recapture?" attn":" bad"):""],
+    ["三段时刻 t₁ / t₂ / t₃",fmt(M.tPullUp,2)+" / "+fmt(M.tStraight,2)+" / "+fmt(M.tTangent,2),"s",
+      "拉起结束 / 开始改平 / 相切",""],
+    ["末段对准点 x（仅 fixed）",M.alignPt?fmt(M.alignPt.x,0):"—","m",
+      M.alignPt?"此后直线命中":"closed 闭环无「对准点」概念",""],
+    ["末端入射角",isFinite(M.impactDeg)?fmt(M.impactDeg,1):"—","°",
+      M.diag.recapture?"回抓段：入射角可 > 90°（向后下方）":"落点处航迹角",isFinite(M.impactDeg)?"":" bad"],
+    ["飞行时间（本模型）★",fmt(M.T,2),"s","各段按自己的加速度律积分",""],
+    ["恒速近似时间（对照）",fmt(M.Tconst,2),"s","整段都按 maxSpeed 飞的 v5 口径",""],
+    ["相切处速度 / 目标 va",fmt(M.vAtTan,0)+" / "+fmt(S.va,0),"m/s",
+      constMode?"恒速口径":(M.diag.shortOfSpeed?"未加速到位":"已达段速"),M.diag.shortOfSpeed?" attn":""],
+    ["预算差（预算 − L_asc）",fmt(M.budget-M.Lasc,0),"m",M.diag.early?"早触发":"可相切",M.diag.early?" attn":""]
+  ];
+  $("metrics").innerHTML=cards.map(c=>{
+    return '<div class="metric'+(c[4]||"")+'"><div class="k">'+c[0]+'</div><div class="v">'+c[1]+
+      '<small>'+c[2]+'</small></div><div class="sub">'+c[3]+'</div></div>';
+  }).join("");
+
+  const notes=[];
+  const pi=PRESETS[currentPreset];
+  if(pi&&pi.info) notes.push(['ok','<b>'+esc(pi.label)+'</b>：'+esc(pi.info)]);
+  if(M.diag.climbInfeasible)
+    notes.push(['err', M.diag.why==="radiusTooBig"
+      ? ('<b>转不回来（ω 太低 / R 太大）⇒ 会冲过巡航线</b>：在当前 ω 下，连最平的 α 也让两段转向弧'+
+         '爬的高度超过 ΔH = '+fmt(Math.abs(S.H-S.h0),0)+' m（量级 '+fmt(M.diag.arcHMax,0)+' m）⇒ '+
+         '<b>导弹压到水平时已经高于设定巡航高度</b>，不是「压不到巡航线」。'+
+         '提高 <code>gAsc</code>/<code>gDef</code> 或 <code>k</code>（缩小 R）、增大 <code>H</code>。')
+      : ('<b>α 无解</b>：在「R 从 v₀/ω 长到 v/ω」的速度律下，'+ruleName+
+         '在 α ∈ [0.35°, 88.5°] 内找不到能把末端压到 H 的仰角（两段转向弧最多只爬到 '+
+         fmt(M.diag.arcHMax,0)+' m，而 ΔH = '+fmt(Math.abs(S.H-S.h0),0)+' m）。'+
+         '提高 <code>gAsc</code>/<code>k</code>（缩小 R）、降低 <code>H</code>，或减小 θ₀。')]);
+  if(M.diag.overshoot>0.5)
+    notes.push(['err','<b>实际相切线高于设定巡航线：+' + fmt(M.diag.overshoot,0) + ' m</b>（实际 '+
+      fmt(M.diag.cruiseActual,0)+' m / 设定 '+fmt(M.H,0)+' m）。'+
+      '成因：上升段 ω 过低 ⇒ <code>R = v/ω</code> 太大 ⇒ 压到水平之前就已爬过 H。'+
+      '<b>v6.5 按实机改末段制导</b>：超调后导弹仍在俯冲段 ω 允许范围内<b>尽可能调整俯角</b>，'+
+      '不是冻结下压角；只要还有剩余高度，水平投影越过目标再折返回来也允许。'+
+      '本次结果：最远点 x = <b>'+fmt(M.maxX,0)+' m</b>（越过 D '+fmt(M.diag.overshootX,0)+' m），'+
+      '落点 x = <b>'+fmt(M.diag.impactX,0)+' m</b>，'+
+      (M.diag.impactHit?(M.diag.recapture?'<b>折返后命中目标</b>。':'命中目标。')
+        :('偏离设定目标 '+(M.diag.impactX>=M.D?'+':'−')+fmt(Math.abs(M.diag.impactX-M.D),0)+' m。'))+
+      '图上黄点是轨迹最远点，红色虚线是设定目标，横轴已自动扩展到最远点。']);
+  if(M.diag.hold)
+    notes.push(['warn','<b>中段是保持段（ω = 0 ⇒ R = ∞），不是圆弧</b>：两段转向弧加起来最多只能爬 '+
+      fmt(M.diag.arcHMax,0)+' m，装不下 ΔH = '+fmt(Math.abs(S.H-(S.h0||0)),0)+' m ⇒ 必须有一段“按住俯仰角直飞”。'+
+      '所以这条轨迹的 R 剖面是 <b>'+
+      (noPull?"":("0 → "+fmt(M.RascEnd,0)+" → "))+'∞'+
+      '（保持段）'+' → '+fmt(M.RdefStart,0)+' → '+fmt(M.RdefEnd,0)+' m</b>：只在两段转向弧里随 v 增大，'+
+      '跨过直线段会跳到 ∞ 再跳回来。<b>这不是 bug，是几何硬约束</b>：以 ω = '+
+      fmt(Math.abs(S.gAsc)*(S.kOmega||1.5),3)+' rad/s 从 '+fmt(deg(S.theta0),0)+
+      '° 连续压到 0°，全程也只能爬 '+fmt(M.diag.maxTurnH,0)+' m。']);
+  if(M.diag.pitchOver&&!M.flat&&Math.abs(deg(S.theta0)-M.alphaDeg)>0.5)
+    notes.push(['warn','<b>近垂直发射（θ₀ = '+fmt(S.theta0,3)+' rad ≈ '+fmt(deg(S.theta0),0)+'°）</b>：拉起弧要先压转 '+
+      fmt(Math.abs(deg(S.theta0)-M.alphaDeg),0)+'°，其高度变化 '+fmt(M.diag.h1,0)+' m。'+
+      '若这段高度超过巡航高度，压转就压不下来 —— 见上方告警。']);
+  if(M.diag.alphaForced)
+    notes.push(['warn','<b>斜直线被压成 0</b>：该 α 下改平弧（名义 R₂ = '+fmt(M.Rdef,0)+
+      ' m）自己就吃满剩余高差，容不下斜直线。工具已收敛到 L = 0 并显式标注（α = '+fmt(M.alphaDeg,2)+'°）。']);
+  if(M.diag.early)
+    notes.push(['warn','<b>爬升未完成即触发末段</b>：按当前 ω 尺度 k='+fmt(S.kOmega,3)+
+      '，相切需 '+fmt(M.Lasc,0)+' m，但触发点只有 '+fmt(M.budget,0)+' m（早 '+fmt(M.diag.earlyBy,0)+' m）。'+
+      '虚线是「不被打断的理论爬升」。要让相切恰好落在触发点，点「按预算反解 k」。']);
+  if(M.diag.alignFail)
+    notes.push(['err','<b>末段未能命中</b>：'+(M.diag.orbit?'在剩余高度内始终没转到目标方向（可能绕圈）'
+      :'穿越目标高度线时水平投影偏离目标')+'。提高 <code>gTrm</code> / <code>k</code>、降低 <code>vt</code>，或增大 <code>Dt</code> / <code>H</code>。']);
+  if(M.flat)
+    notes.push(['','<b>平直弹道</b>：H ≤ 0 / ΔH = 0 / Dt = 0 ⇒ 不进入曲率模型，原版 193/197 个导弹即如此。']);
+  if(!M.flat&&!M.diag.early&&!M.diag.climbInfeasible&&M.diag.overshoot<=0.5&&M.Lcruise>0.5)
+    notes.push(['ok','相切发生在 x='+fmt(M.Lasc,0)+' m，平飞平台 <b>'+fmt(M.Lcruise,0)+
+      ' m</b> ⇒ 梯形。想变拱形：压低 H、增大 Dt，或减小爬升 AutoGyr（R 变大、L_asc 变长）。']);
+  if(!M.flat&&!M.diag.early&&!M.diag.climbInfeasible&&M.diag.overshoot<=0.5&&M.Lcruise<=0.5)
+    notes.push(['ok','平飞段 = 0 ⇒ <b>拱形</b>，爬升末端与巡航线相切后立刻进入末段。']);
+  notes.push(['warn','<b>v6 核心：加速度决定形态</b>：段内速度按 <code>MaxAccelerationGRU</code> 均匀趋向 <code>MaxSpeedGRU</code>，'+
+    '而转向角速度恒为 ω ⇒ <code>R = v/ω</code> 逐点变化。'+
+    (constMode?'当前是 <b>恒速对照</b>（v5 旧口径），改回「按加速度均匀变速」才能看到真实形态。'
+              :'改平弧的 R 从 '+fmt(M.RdefStart,0)+' m 长到 '+fmt(M.RdefEnd,0)+' m（相切处最大），'+
+               '这就是「同样 <code>gAsc</code> 下换 <code>aa</code> 会得到不同弹道」的原因。')]);
+  notes.push(['warn','<b>转向率归属（v6.4 · 已按实机裁定）</b>：实机「调低 Ascendant.AutoGyr 时拉起弧与改平弧'+
+    '<b>两段都变缓</b>」⇒ 当前是 <b>'+(M.diag.omegaRule==="split"?'split 旧分相口径（对照用）':'unified 上升段统一口径（默认）')+'</b>：'+
+    (M.diag.omegaRule==="split"
+      ? '拉起弧用 <code>gAsc</code>、改平弧用 <code>gDef</code>（v5/v6 旧约定），只改 gAsc 时名义 R₂ 不动。'
+      : '两段转向共用 <code>ω = gAsc·k</code>，名义 R₁ = '+fmt(M.Rasc,0)+' m、R₂ = '+fmt(M.Rdef,0)+
+        ' m <b>都随 gAsc 反比变化</b>。')+
+    '参数栏「转向率归属」切到另一项可逐位 A/B 对照。<b>末段仍用 <code>gTrm</code></b> —— '+
+    '实机只观察了上升段，末段/平飞是否也共用一个 ω 没有判据，故未合并（§10 实验 22）。']);
+  if(!M.flat)
+    notes.push(['','<b>α 的两种工况（v6.4）</b>：按 α = |θ₀|、L = 0 连续压转能爬 <b>'+
+      fmt(M.diag.freeTurnH,0)+' m</b>，而 ΔH = '+fmt(Math.abs(S.H-(S.h0||0)),0)+' m ⇒ '+
+      (M.diag.why==="overshoot"
+        ? '<b>自由超调工况</b>：引擎不会为凑 H 反调 α，α 保持 θ₀，相切高度由几何自由决定（见上方红字）。'
+        : '<b>闭环工况</b>：由 <code>h₁(α)+h₂(α) = ΔH</code> 派生 α；ΔH 太大则切保持段。')+
+      '判据与 <code>buildAscent(L=0)</code> 同源，不再用第三套参照；v6.3 那种「α 被反解小、把超调精确抵消」的行为已按实机关闭。']);
+  if(M.diag.shortOfSpeed&&!constMode)
+    notes.push(['warn','<b>本段没加速到位</b>：相切处只有 '+fmt(M.vAtTan,0)+' m/s，远低于 <code>va</code> = '+fmt(S.va,0)+
+      ' m/s ⇒ 整段都在加速，半径一路变大。想让「va 真的起作用」，要么加大 <code>aa</code>、要么缩短爬升段。'+
+      '这也说明：<code>MaxSpeedGRU</code> 只有在本段跑得够长时才影响形状。']);
+  notes.push(['','<b>「斜直线」是什么（v6.2 修正）</b>：'+
+    (M.straightLen>1
+      ? ('本例 L = '+fmt(M.straightLen,0)+' m ⇒ 这是一段<b>真的保持段</b>（ω = 0，R = ∞），'+
+         '不是"渐开线尾部看起来像直线"。v6 原来那句"默认闭环 L = 0，爬升里没有真正的直线段"只在小 ΔH 时成立。')
+      : ('本例 L = 0 ⇒ 爬升里没有真正的直线段，但 R 随速度单调增大 ⇒ 渐开线尾部曲率很小，游戏尺度上像"斜着直飞"。'))+
+    '<b>可证伪</b>：侧视逐帧读那段直线的俯仰角。若<b>严格恒定</b>（|Δθ| &lt; 0.05°/20 m，平台 ≥ 100 m）⇒ 真有保持段；'+
+    '若缓慢变缓、无平台 ⇒ 应改用小 ω 的连续转（见告警里的"连续转能爬多高"）。']);
+  notes.push(['','<b>硬约束（实测 197/197 恒等）</b>：<code>Ammunition.ProjectileSpeedGRU</code> 必须 = '+
+    '<code>DefaultConfig.MaxSpeedGRU</code> = <b>'+fmt(S.vc,0)+'</b>。改速度时两边同步。']);
+  notes.push(['','<b>几何（v6）</b>：ω = AutoGyr(rad) × k；段内 v 按 a 均匀变 ⇒ R = v/ω。'+
+    'a、ω 恒定时该段解析上是<b>圆的渐开线</b>（r = a/ω²、R = rψ），工具用时间步中点法积分，回归里与解析式比对。'+
+    '<b>α、k、v₀ 都不是 NDF 字段</b>；导出片段只含官方字段。']);
+  notes.push(['','<b>机制隔离（实测）</b>：曲射炮击走 <code>PitchForParabolic</code>、航弹走 '+
+    '<code>BombTrajectoryConfigs.ndf</code>，与高抛零字段重叠。AGM114 的 <code>TirIndirect = False</code>。']);
+  $("notes").innerHTML=notes.map(n=>'<div class="note '+n[0]+'">'+n[1]+'</div>').join("");
+}
+
+/* ---------- NDF 片段 ---------- */
+function ndfText(){
+  // S 里角度已是弧度，导出直接给弧度（NDF 原生单位），不再乘 rad()
+  const r=v=>Number(v).toFixed(16);
+  const g6=v=>fmt(v,6);
+  const dg=v=>fmt(deg(v),1)+'°';
+  const cfg=(name,v,a,g)=>
+    '    '+name+' = TGuidedMissileMovementConfigDescriptor\n'+
+    '    (\n'+
+    '        MaxSpeedGRU        = '+v+'\n'+
+    '        MaxAccelerationGRU = '+a+'\n'+
+    '        AutoGyr            = '+r(g)+'\n'+
+    '    )\n';
+  let t='';
+  t+='// 由 WARNO 高抛弹道设计器 v6.6 生成 · 字段结构来自 base.zip 实测（AGM114A）\n';
+  t+='// v6：MaxAccelerationGRU 不是时间轴装饰 —— 它决定段内速度曲线，进而决定 R=v/ω，\n';
+  t+='//     因此直接影响弹道形态。改加速度等于改形状，不要拿它当"只影响时间"的旋钮。\n';
+  t+='// v6.4 实机：Ascendant.AutoGyr 同时决定拉起弧与改平弧的转向率（两段都变缓）；\n';
+  t+='//     若把它调得过低而 CruiseAltitudeGRU 又偏小，导弹会冲过设定巡航线。\n';
+  t+='// v6.5 实机：末段是闭环制导 —— 超调后仍按 Terminal.AutoGyr 尽可能修正俯角，\n';
+  t+='//     只要还有剩余高度，水平投影越过目标再折返回来也可（落点可能偏离 D）。\n';
+  t+='// v6.6：ω 尺度 k 定标为 1.5（实际 ω = AutoGyr×1.5）；k 只是工具侧换算，不进 NDF。\n';
+  t+='// 本块只含官方字段。α、ω 尺度 k、发射初速 v₀、转向率归属口径都不写进 NDF；AutoGyr 为原生弧度值。\n';
+  t+='// AutoGyr 弧度→度数对照：Default '+g6(S.gDef)+'（'+dg(S.gDef)+'）· Uncontrollable '+
+      g6(S.gUnc)+'（'+dg(S.gUnc)+'）'+
+      ((!!S.flat||S.H<=0||S.H===S.h0||S.Dt<=0)?'':' · Ascendant '+g6(S.gAsc)+'（'+dg(S.gAsc)+'）'+
+      ' · Terminal '+g6(S.gTrm)+'（'+dg(S.gTrm)+'）')+'\n';
+  t+='// 硬约束：Ammunition.ProjectileSpeedGRU 必须等于本块 DefaultConfig.MaxSpeedGRU = '+S.vc+'\n';
+  t+='// 高抛三件套：AscendantPhaseConfig + TerminalPhaseConfig + HorizontalDistance...\n\n';
+  t+='TGuidedMissileMovementModuleDescriptor\n(\n';
+  t+=cfg('DefaultConfig',S.vc,S.ac,S.gDef);
+  t+=cfg('UncontrollableConfig',S.vc,S.ac,S.gUnc);
+  t+='\n';
+  const isFlat=!!S.flat || S.H<=0 || S.H===S.h0 || S.Dt<=0;
+  if(!isFlat){
+    t+=cfg('AscendantPhaseConfig',S.va,S.aa,S.gAsc)+'\n';
+    t+=cfg('TerminalPhaseConfig',S.vt,S.at,S.gTrm);
+  }else{
+    t+='// 当前为平直弹道（H<=0 / H=h0 / Dt=0）：原版 193 个导弹不写下面两个 config\n';
+    t+='// AscendantPhaseConfig / TerminalPhaseConfig 省略\n';
+  }
+  t+='    CruiseAltitudeGRU = '+(Math.round(S.H*100)/100).toFixed(1)+'\n';
+  if(S.Dt>0 && !isFlat) t+='    HorizontalDistanceToTargetToStartTerminalPhaseGRU = '+S.Dt+'\n';
+  t+='    // ↓ 混沌参数：沿用 AGM114 官方值，与弹道形状无关\n';
+  t+='    TimeMaxBetweenRandomMoveWhenUncontrollable = 1\n';
+  t+='    TimeMinBetweenRandomMoveWhenUncontrollable = 0.5\n';
+  t+='    TimeBetweenChaosUpdates = 0.1\n';
+  t+='    RangeChaos = 750\n';
+  t+='    AngleMaxForRandomMouvUncontrollable = 5.0\n';
+  t+='    RotationSpeedWhenUncontrollable = 5\n';
+  t+=')\n';
+  return t;
+}
+
+/* ---------- 渲染入口 ---------- */
+function render(){
+  syncInputs();
+  const M=compute();
+  draw(M); renderInfo(M);
+  $("ndf").value=ndfText();
+  window.__M=M;
+}
+
+/* ---------- 事件 ---------- */
+function loadPreset(key){
+  currentPreset=key;
+  const p=PRESETS[key];
+  if(p&&key!=="custom") S=Object.assign({},p);
+  $("preset").value=key;
+  render();
+}
+function init(){
+  const sel=$("preset");
+  Object.keys(PRESETS).forEach(k=>{
+    const o=document.createElement("option"); o.value=k; o.textContent=PRESETS[k].label; sel.appendChild(o);
+  });
+  sel.value=currentPreset;
+  sel.addEventListener("change",()=>loadPreset(sel.value));
+  buildParams();
+  $("autoZoom").checked=autoZoom;
+  $("autoZoom").addEventListener("change",e=>{ autoZoom=e.target.checked; render(); });
+  $("btnOneToOne").addEventListener("click",()=>{
+    autoZoom=false; $("autoZoom").checked=false; S.zoom=1; render(); flash("btnOneToOne","已切 1:1");
+  });
+  $("btnCalib").addEventListener("click",()=>{
+    const r=solveK(S);
+    if(!r.ok){ flash("btnCalib","无解 · 调 H / 预算"); return; }
+    S.kOmega=clamp(Number(r.k.toFixed(4)),0.1,10);
+    markCustom(); render();
+    flash("btnCalib","k = "+fmt(S.kOmega,2));
+  });
+  $("btnReset").addEventListener("click",()=>loadPreset(currentPreset==="custom"?"agm114":currentPreset));
+  $("btnCopy").addEventListener("click",async()=>{
+    const t=$("ndf").value;
+    try{ await navigator.clipboard.writeText(t); flash("btnCopy","已复制 ✓"); }
+    catch(e){ $("ndf").removeAttribute("readonly"); $("ndf").select(); document.execCommand("copy");
+             $("ndf").setAttribute("readonly",""); flash("btnCopy","已复制 ✓"); }
+  });
+  $("btnJson").addEventListener("click",()=>{
+    const M=window.__M||{};
+    const data={_tool:"WARNO Loft Trajectory Designer v6.6",_model:"accel-varying-radius-three-phase-climb-unified-omega-free-overshoot-closed-terminal",
+      _angleUnit:"rad",_speedModel:S.speedModel,_omegaRule:(S.omegaRule||"unified"),
+      _terminalRule:(S.terminalRule||"closed"),
+      _preset:currentPreset,_kOmega:S.kOmega,_alphaRule:S.alphaRule,_v0:S.v0,
+      _derived:{alphaDeg:M.alphaDeg,L_asc:M.Lasc,straightLen:M.straightLen,
+        RascStart:M.RascStart,RascEnd:M.RascEnd,T:M.T,Tconst:M.Tconst,vAtTan:M.vAtTan,
+        overshoot:M.diag?M.diag.overshoot:0,impactX:M.diag?M.diag.impactX:null,
+        maxX:M.maxX,impactHit:M.diag?M.diag.impactHit:null,recapture:M.diag?M.diag.recapture:null},
+      _note:"字段实测；θ₀ 与 AutoGyr 等角度参数一律弧度（与 NDF 同口径）；α 由几何派生（非 NDF 字段）；段内速度按 MaxAccelerationGRU 均匀变速 ⇒ R=v/ω 逐点变化，加速度直接改形态；v6.4 上升段两段转向统一用 gAsc，ω 偏低时 α 保持 θ₀、相切高度自由超调；v6.5 末段为闭环追踪（按 Terminal.AutoGyr 逐步修正俯角，可越过目标再折返），落点由几何决定、可能偏离 D；ω 绝对尺度 k 当前定标 1.5（1.00 可复现 v6 及更早基线）；v₀ 实测为 0（自静止）。GRU≈m 为假设。",
+      _autoZoom:autoZoom,params:S};
+    download("warno_loft_params.json",JSON.stringify(data,null,2),"application/json");
+  });
+  $("btnPng").addEventListener("click",()=>{
+    const svg=$("chart"), src=new XMLSerializer().serializeToString(svg);
+    const blob=new Blob([src],{type:"image/svg+xml;charset=utf-8"});
+    const url=URL.createObjectURL(blob), img=new Image();
+    img.onload=()=>{
+      const c=document.createElement("canvas"); c.width=1920; c.height=920;
+      const g=c.getContext("2d"); g.fillStyle="#1d212a"; g.fillRect(0,0,c.width,c.height);
+      g.drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url);
+      c.toBlob(b=>{ const u=URL.createObjectURL(b); const a=document.createElement("a");
+        a.href=u; a.download="warno_loft_trajectory.png"; a.click();
+        setTimeout(()=>URL.revokeObjectURL(u),1500); });
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); flash("btnPng","导出失败"); };
+    img.src=url;
+  });
+  $("btnImport").addEventListener("click",()=>$("fileInput").click());
+  $("fileInput").addEventListener("change",e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const rd=new FileReader();
+    rd.onload=()=>{
+      let r;
+      try{ r=applyImportJSON(JSON.parse(rd.result)); }
+      catch(err){ flash("btnImport","解析失败"); e.target.value=""; return; }
+      if(!r.ok){ flash("btnImport",r.reason); e.target.value=""; return; }
+      render();
+      flash("btnImport", r.legacy?"已导入 ✓（角度→弧度已换算）":"已导入 ✓");
+      e.target.value="";
+    };
+    rd.readAsText(f);
+  });
+  render();
+}
+
+/* 导入 JSON：v4 及更早的导出是**角度制**（无 _angleUnit 标记）；v5 起统一弧度。
+   抽成纯函数以便回归脚本直接测，不依赖 FileReader。 */
+function applyImportJSON(j){
+  const p=j.params||j;
+  const legacy = j._angleUnit!=="rad";
+  const ANGKEYS=["theta0","alphaRad","gDef","gUnc","gAsc","gTrm"];
+  let n=0;
+  GROUPS.forEach(g=>g.items.forEach(it=>{
+    if(it.type==="select"){ if(typeof p[it.k]==="string") n++; }
+    else if(typeof p[it.k]==="number"&&isFinite(p[it.k])) n++;
+  }));
+  if(n<5) return {ok:false,reason:"JSON 缺参数"};
+  GROUPS.forEach(g=>g.items.forEach(it=>{
+    if(it.type==="display") return;
+    if(it.type==="select"){ if(typeof p[it.k]==="string") S[it.k]=p[it.k]; }
+    else if(typeof p[it.k]==="number"&&isFinite(p[it.k])) S[it.k]=p[it.k];
+  }));
+  // 旧键名 alphaDeg → alphaRad
+  if(typeof p.alphaRad!=="number" && typeof p.alphaDeg==="number")
+    S.alphaRad = legacy ? rad(p.alphaDeg) : p.alphaDeg;
+  if(legacy) ANGKEYS.forEach(k=>{ if(typeof p[k]==="number"&&isFinite(p[k])) S[k]=rad(p[k]); });
+  if(typeof p.flat==="boolean") S.flat=p.flat;
+  if(typeof p.kOmega!=="number") S.kOmega=1.5;
+  if(typeof S.theta0!=="number") S.theta0=0;
+  if(typeof S.alphaRad!=="number") S.alphaRad=rad(15);
+  if(typeof p.alphaRule!=="string") S.alphaRule="dualphase";
+  if(typeof j._autoZoom==="boolean"){ autoZoom=j._autoZoom; $("autoZoom").checked=autoZoom; }
+  currentPreset="custom"; $("preset").value="custom";
+  return {ok:true,legacy,n};
+}
+function flash(id,msg){
+  const b=$(id), old=b.textContent; b.textContent=msg;
+  setTimeout(()=>{ b.textContent=old; },1400);
+}
+function download(name,content,type){
+  const b=new Blob([content],{type}), u=URL.createObjectURL(b);
+  const a=document.createElement("a"); a.href=u; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(u),1500);
+}
+init();
+</script>
+</body>
+</html>

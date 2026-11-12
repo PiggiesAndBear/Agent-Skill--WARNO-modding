@@ -9,13 +9,13 @@
 |---|---|---|
 | §0 | 导出定稿参数 | 每次导出都看 |
 | §1 | glTF/GLB 四道清洗 | 素材不是 FBX 而是 glTF 时 |
-| §2 | PBR 通道接材质 | 表面发油、发亮、像镀铬 |
+| §2 | PBR 通道接材质 / **整车发黑的坑（§2 附带坑四）** / **调色专题** | 表面发油、发亮、像镀铬、**发黑看不出颜色** |
 | §3 | 在成品 FBX 上补几何 | 只想加几个零件、不想重跑烘焙 |
 | §4 | 删不可见面减面 | 面数超标、内腔封闭 |
 | §5 | atlas 像素预算 | 多套贴图要合并 |
 | §6 | 新增小 FBX 的门槛 | 想让引擎画/不画某个小物件 |
 
-## 0.0 【四条】AssetCooker 卡人的命名/数值规矩（本项目实测，各踩一次）
+## 0.0 【六条】AssetCooker 卡人的命名/数值规矩（本项目实测，各踩一次）
 
 | 现象（AssetCooker 原文） | 真因 | 修法 |
 |---|---|---|
@@ -23,8 +23,13 @@
 | `Trying to combine textures with different resolutions: 'X_R.png' and 'X_M.png'` | 同一套贴图**分辨率不一致**（主图 2048、补的平坦图 1024） | 同一材质名下 base/_NM/_R/_M/_O **全部同分辨率**；补的平坦图按主图尺寸生成 |
 | `Can't quantize texcoords because UVs are not in the range [-4, 4]: UV=(3.91, 4.07)` | **FBX 导出会翻转 V**（写 1−v），只按源 UV 平移救不了 | 判据改成 `max(|u|,|v|,|1−u|,|1−v|) ≤ 3.9`；超了就整体乘 0.5（贴图是 seamless 的，平铺密度变了也不出缝） |
 | `Mesh contains an abnormal normal: sub-mesh 'Chassis', position = (…), normal length 0` | 源模型有**零面积三角**，法线 (0,0,0) | 导出前统一 `quads_convert_to_tris` → `dissolve_degenerate(1e-5)` → `delete_loose` → `normals_make_consistent` |
+| `Texture slot 'NormalTexture' from material 'X' violates naming convention: "X_N.png" does not match '^.*_NM$'` | 法线贴图后缀写成 **`_N`**（不是 `_NM`） | 后缀一律 `_NM`。⚠ 注意与第 1 行的区别：**diffuse 槽的规则是"不许以这些后缀结尾"，Normal 槽的规则是"必须恰好以 `_NM` 结尾"**，两条同时生效 |
+| `fatal: … Unrecognized image format`（文件名明明是 `.png`） | 文件头不是 PNG。Blender 的 `image.save()` / `save_render()` 在部分情况下**把原始缓冲直接落盘**，扩展名是 `.png` 而内容是 JPEG（`ffd8ffe0`） | 用 PIL **按格式重编码**：`Image.open(src).save(dst, format="PNG")`；完事 `open(...,'rb').read(4) == b'\x89PNG'` 断言一次 |
 
-四条都属于"编译期明确报错"，比缺骨骼那类静默失败好查；**报错里的文件名就是真因**，别去 NDF 里找。
+六条都属于"编译期明确报错"，比缺骨骼那类静默失败好查；**报错里的文件名就是真因**，别去 NDF 里找。
+但要注意**报错文字可能指向错误的槽位**：`Unrecognized image format` 那条只报"某张图不是图"，
+不报是哪一张——按"最近新加的那套贴图"逐个查文件头，比按报错找快。
+
 
 ## 0. FBX 导出定稿参数
 
@@ -346,6 +351,108 @@ ls Gen/PC/Atlas/<资产路径>/TSCORM_*.tgv      # 必须存在
 
 ---
 
+### 【附带坑四】从源材质「抄通道」时的两个致命误读（**整车发黑就查这两条**）
+
+从外部模型（Sketchfab / glTF）迁材质时，常见做法是「顺着 Base Color / Roughness /
+Metallic 的入链回溯，把摸到的贴图按通道拆出来」。这一步有两个会同时踩的误读。
+
+#### ① 只看链接、不看**乘数** ⇒ 抄出一张全白金属度
+
+```
+SEPARATE_COLOR.Blue → MATH(MULTIPLY, B=0.0) → Metallic     ← 源材质把金属度压成 0
+```
+
+上一版代码直接把 `SEPARATE_COLOR.Blue` 对应的 B 通道导成 `_M`，
+结果那张 ORM 的 **B 通道整张 = 1.000**（min 0.787）⇒ 导出 `_M` 全白 ⇒
+`metallic = 1` ⇒ **没有漫反射，整车在游戏里几乎全黑、只剩轮廓**。
+
+- 症状极具误导性：看起来像「贴图太暗 / 光照不对 / 色调太黑」，**实际是材质类型错了**。
+- **判据**：回溯到 BSDF 的**第一跳**之外，把中间节点（`MATH` / `MIX` / `SEPARATE_COLOR`）
+  的乘数、混合模式一起读出来。乘数为 0 就必须导常量 0，而不是导那张通道。
+- **验收（最省事）**：`_M.png` 用 PIL 量均值，和本 Mod **已实机通过**的车对比：
+
+  ```python
+  from PIL import Image; import numpy as np
+  a = np.asarray(Image.open(p).convert("RGB"), np.float32) / 255.0
+  print(a.mean(axis=(0, 1)))        # 车体应为 ~0.0；若 ≈1.000 就是全金属
+  ```
+
+  本项目实测：2S25 0.24–0.34、Object685 / Tochka / BMPT-787 / T-90A **0.000**、
+  LOSAT（错误版）**1.000**。全 0 是这类「涂装车体」的正常值。
+
+#### ② `Image.pixels` 返回的是**原始存储值**，不是线性值
+
+```python
+px = np.empty(w * h * 4, np.float32); im.pixels.foreach_get(px)
+# 8bit sRGB 图：拿到的是 sRGB 数值（≈ 磁盘 PNG/255），不是线性值
+```
+
+Blender 只在**着色器采样时**做色彩管理；`pixels` 是裸缓冲。据此在调色函数里
+再做一次 `lin2srgb()` 往返，等于**套了两遍 gamma**：日志里的「原值」
+每个通道都虚高（实测 `R=0.513`，真值 `0.234`），调色结果整体偏色。
+处理 8bit 贴图时直接对 `pixels` 做「sRGB 空间」运算（gamma / 增益 / 饱和度）即可，
+写完再把图设成同样的 `colorspace_settings`。
+
+#### ③ 源模型**根本没有 ORM** ⇒ `_R` / `_M` 整个缺失（与①同病）
+
+有些源模型（尤其 Sketchfab 的低价位车模）材质里**只有 D 和 NM**，没有 ORM。
+按「摸到什么导什么」写出来的烘焙脚本，就会只产出 `_D.png` / `_NM.png` 两张 ——
+引擎拿不到 roughness / metallic，**结果与①的「`_M` 全白」完全一样：走成金属外观、发黑**。
+
+- **判据**：`ls <资产目录>` 只有 `_D` / `_NM`，或编译产物 `Gen/PC/Atlas/.../` 里
+  **没有 `TSCORM_CombinedORMTexture01.tgv`**。本 Mod LAV-600 就是这一例：
+  补上 R/M 后该 tgv 才第一次出现（2,820 B，纯色压缩率极高）。
+- **操作**：用**常量图**补齐，尺寸与 `_D` 一致（含平铺倍数）：
+
+  ```python
+  const_tex(path_R, 0.945, w, h * tile)   # 粗糙度：涂装车哑光
+  const_tex(path_M, 0.000, w, h * tile)   # 金属度：非金属
+  ```
+
+  取值口径对齐本 Mod **已实机通过**的车：T90A / Object685 / BMPT-787 / LOSAT 的 `_R` 均 **0.945**、
+  `_M` 均 **0.000**（2S25 的 `_R` 来自 ORM 的 G 通道，0.61–0.64，也可用）。
+- 节点侧必须**四通道直连**（首跳 `TEX_IMAGE`，见坑三），否则 ORM 槽仍然不生成。
+- **一句话**：`缺 _M` 与 `_M≡1` **是同一种病**。判据是「引擎最终拿到的 metallic」，
+  不是「贴图文件有几张」。
+
+---
+
+### 【专题】贴图「偏黑 / 看不出颜色」的三层排查顺序
+
+按这个顺序查，能少走两轮：
+
+| 层 | 查什么 | 判据 |
+|---|---|---|
+| 0 | **`_R` / `_M` 这两个文件到底有没有生成** | 见坑四 ③；缺文件 ≡ 全金属，同样发黑。查 `Gen/PC/Atlas/…` 有没有 `TSCORM_*` |
+| 1 | **`_M` 是否全白**（金属度） | 见坑四 ①；全 1.0 ⇒ 必然发黑 |
+| 2 | **`_R` 是否被压暗** | 源 Roughness 若走了 `MATH×k`，`_R` 要按同一乘数导出；否则偏亮/偏哑 |
+| 3 | **Base Color 本身是不是棕灰** | 用 PIL 量 `R/G/B` 均值：`G/R < 1` 且 `G−B < 0.05` ⇒ 这张图本来就没有绿，只能调色 |
+
+第 3 层确认「图本身无绿」后，才做**调色**（不要用改光照/改 `_R` 去凑）：
+
+```python
+# 全部在 sRGB 空间算；参数集中放一个模块，烘焙脚本与离线对照工具共用
+def grade_srgb(s, gamma, gain, sat):
+    y = np.clip(s, 0, 1) ** gamma * np.asarray(gain)      # gamma<1 提亮中间调
+    lum = (y * [0.2126, 0.7152, 0.0722]).sum(-1, keepdims=True)
+    return np.clip(lum + (y - lum) * sat, 0, 1)           # 饱和度绕亮度缩放
+```
+
+**调参要留对照图**：把「原色 / 温和 / 橄榄 / 明显」四档并排渲成一张图
+（同一批裁剪区域，不跑引擎），选中哪档再写回参数。本项目实测一组可直接复用的值：
+
+| 目标 | gamma | 通道增益 (R,G,B) | sat | 8bit 均值变化 |
+|---|---|---|---|---|
+| 橄榄绿车体 | 0.85 | (1.00, 1.10, 0.80) | 1.15 | `R .234 G .222 B .188 → R .288 G .306 B .176` |
+| 枪械（保持灰） | 0.92 | (1.00, 1.00, 1.00) | 1.00 | 只提亮，不改色相 |
+| 履带 | 0.85 | (1.00, 1.02, 0.95) | 1.05 | 跟上车体亮度，微绿偏 |
+
+> 验收不能只看贴图数值，必须**渲一张整车**看：`_M` 归零后暗部会被环境光抬起来，
+> 与只看 albedo 的判断不同。本项目在 `R .288/.306/.176`、`lum 0.293` 时
+> 与同批单位（0.26–0.27）亮度接近且绿色可辨。
+
+---
+
 ## 3. 在成品 FBX 上补几何（不重跑烘焙）
 
 适用场景：模型已经编译通过、贴图也验收过了，只想**加一小块几何**
@@ -517,6 +624,114 @@ AI 超分源图，或者接受现状。空出来的画布是给超分后用的�
 而引擎找挂架时匹配的是**模型自带的"槽位数"元数据**，自建几何声明不了槽，
 所以"做一个看不见的挂架"永远匹配不上（`No pylon with requested slot count (1)`）。
 详见 `21-depiction.md §4.3`。
+
+---
+
+## 6.1 【静默杀手】资产目录不能与原版游戏路径重名
+
+**症状**：`AssetCooker` 全程 `rc=0`、无 Fatal、日志一路绿，但 `Gen/PC/Mesh/…/`
+下**主网格 `mesh.neu3` 根本不生成**，只生成了你后来加的那份附属小 FBX
+（本项目：主模型没有，`Rail/…_Rail` 那份有）。进游戏自然是空白/无模型，**零报错**。
+
+**真因**：`AssetCooker` 按**路径**判重。若你的 FBX 落在与原版游戏资产完全相同的目录
+
+```
+✅ 原版：GameData:/Assets/3D/Units/URSS/Canon/Howz_2A36_Giatsint_B/
+❌ 你的：同一条路径 —— 烘焙器认为"这个路径已在 CoreCatalog 里注册过"，直接跳过不生成
+```
+
+它不会覆盖、不会提示、不会报错，就是**当作已做过**跳过。改内容、改文件名、加 `_v2`
+都没用，**判据是目录**（`Ref` 路径），不是文件。
+
+**修法**：换一个游戏里**不存在**的目录名，把整个资产目录搬过去，再同步改所有
+`Mesh="GameData:/Assets/..."` 引用：
+
+```
+GameData:/Assets/3D/Units/URSS/Canon/Howz_2A36_Giatsint_B_KRSN/
+```
+
+**验收判据（别看 rc）**：
+
+- [ ] `Gen/PC/Mesh/<新目录>/mesh.neu3` 存在且**体积合理**（百 KB 级，不是 0）
+- [ ] 附属 FBX 各自也有 `.neu3`（放在子目录 `Rail/` 的会单独出一份）
+- [ ] `AssetCooker` 日志里出现 `Generating: …/mesh.neu3`（**没有这一行就是被跳过了**）
+
+⚠ 反向陷阱：为了"省事"直接原地改原版目录的操作**同样危险** —— 你会静默地改不掉，
+且下一次全量 cook 时可能与核心包互相覆盖。**永远另起目录名。**
+
+---
+
+## 6.2 【加载期】骨骼校验：编译全绿，启动才 Fatal
+
+管线分三道闸，**前两道全过不代表能进游戏**：
+
+| 闸 | 谁在查 | 查什么 | 不过的表现 |
+|---|---|---|---|
+| ① NDF 编译 | `WARNO.exe -generatemod` | 语法 / 引用 / 弹药箱数值一致性 | `Can't load NDF/GFX/Weapon.ndfbin` |
+| ② 资产烘焙 | `AssetCooker` | 贴图命名、UV、法线、材质 | `Fatal: ...` + 文件名 |
+| ③ **加载期** | 游戏读 `ndfbin` 时 | **FBX 的节点名 / 骨骼名** | `Can't load 'Glad:/NDF/GFX/Depiction.ndfbin'` 弹窗 |
+
+第 ③ 道最坑：**编译链没有任何输出**，报错文本指向 `Depiction.ndfbin`，
+但真因全在 FBX 的节点表里。
+
+### 已实测的加载期硬校验（本项目各撞一次）
+
+| 报错原文 | 缺失的节点 | 修法 |
+|---|---|---|
+| `Not enough hardpoint groups : missile system needs 1 hardpoint groups, model has 0 'as' and 'aa' hardpoint groups combined.` | `as_{槽}_{序}`（如 `as_1_1`） | 挂架网格补硬点组，见 `26-ground-missile-tel.md §4.2` |
+| `Missing subdepiction anchor bone 'servant_g'` / `'servant_d'` | 班组锚点骨 | 见下 |
+| `Missing bone 'bras_droit' requested by operator 'carriable'` / `'bras_gauche'` | 拖拽臂骨 | 见下 |
+
+### 【原理】牵引炮模型必须自带 4 根「非几何」骨
+
+原版牵引炮的 depiction 里有两条引用，**它们不在 NDF 里点名骨骼，而是由算子/子描绘去 FBX 里找**：
+
+```
+SubDepictions = [ ] + HumanSubDepictions_<Unit>   →  锚点 = servant_g / servant_d
+Operators     = [ ..., DepictionOperator_Carriable_Canon_Arms35, ... ]
+                                                 →  TCosmeticCarriableOperatorDesc 找 bras_droit / bras_gauche
+```
+
+- `servant_g` / `servant_d`（gauche 左 / droite 右）是**可见班组的落点**：
+  `SubDepiction_ServantLeft/Right` 把兵挂在这两根骨上，锚点在**脚底、地面高度 Z=0**。
+  少了 → 班组无处可挂，整份 depiction 加载失败。
+- `bras_droit` / `bras_gauche` 是 `carriable` 算子（起步时抬架 / 展臂）用的骨。
+  本模型没有手臂几何，它们**只占位、不可见**，但**必须存在**。
+
+⚠ 这两类骨**都不是**「可选装饰」：`HumanSubDepictions_*` 和 `carriable` 是官方牵引炮的标准配置，
+自己重写 `Towed/*.ndf` 时照抄了这两行，就必须把骨补进 FBX。
+
+### 【操作】
+
+1. 回**烘焙脚本**的骨骼字典里加节点（父级 = `Chassis`，与其他 `fx_*` 同级、静止不参与动画）：
+
+```python
+"servant_g": Vector((-0.6,  1.15, 0.0)),   # 炮尾后方、大架内侧，脚底 Z=0
+"servant_d": Vector((-0.6, -1.15, 0.0)),
+"bras_gauche": Vector((-3.0,  3.15, 0.9)), # 贴着大架后段，手的高度
+"bras_droit":  Vector((-3.0, -3.15, 0.9)),
+```
+
+2. 左右符号沿用项目既有约定：**`+Y = gauche(左)`**（与 `roue_gauche_01`、`fx_tourelle5_tir_01` 一致）。
+3. 站位要**算、不要猜**：加一段自校验，打印锚点到最近网格顶点的距离。
+   本项目实测 `servant_*` 距最近顶点 0.97~1.06 m（清楚站在两腿大架之间），
+   `bras_*` 0.16~0.32 m（贴梁，不可见所以不要求间距）。
+4. 若已有 `_fold` / `_deploy` 动画，**重跑动画烘焙**：`.baf` 是逐节点矩阵，新骨会作为静止节点一起导出，
+   不重跑就会出现「网格有骨、动画没骨」的不一致。
+5. **不要**在成品主网格 FBX 上二次导入再导出补骨（贴图相对路径与材质节点会受影响）；
+   直接改烘焙脚本重跑，代价只是几分钟。
+
+### 【验收】
+
+- [ ] FBX 节点表里有这 4 根（`scripts/fbx_anchors.py dump <fbx>`）
+- [ ] 烘焙出的 `mesh.neu3` 里能 `strings` 到 `servant_g` / `servant_d` / `bras_droit` / `bras_gauche`
+- [ ] 两段 `.baf` 体积比补骨前略大（本项目 8,732 → 9,628 B）
+- [ ] 进游戏能过主菜单（这一步过了才说明加载期校验全过）
+
+⚠ **判据**：加载期 Fatal 指向 `*Depiction.ndfbin` 或 `*Unit.ndfbin` 时，
+**先去数 FBX 的节点名**，不要先去 NDF 里搜字段 —— 报错里的 NDF 只是"谁在读"，
+真因在它读的那张网格上。
+
 
 ---
 

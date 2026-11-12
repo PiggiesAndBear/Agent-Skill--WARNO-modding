@@ -347,6 +347,7 @@ NDF parsing error. object not found : 'Weapon_AutoCanon_AP_30mm_2A72_BMPT787'
 | 1 | `Pylons` **不能为空**，至少 1 项（`Missiles` 可以为空，别混） | `No pylon with requested slot count (1) found in PylonSet` |
 | 2 | "槽位数"是**挂架模型自带的元数据**，不是列表长度 | 自建几何 / 孤儿资源永远匹配不上 |
 | 3 | 引擎**只对 `WeaponInfos` 里登记过的武器**去找挂架 | 没登记 = 不画（这正是解法） |
+| 4 | ⭐ 战场版 `TMissileCarriageSubDepictionGenerator` 的 **`Pylons` 与 `ReferenceMesh` 缺一不可**（`TShowroom…` 同理，用 `_Showroom` 那套 PylonSet）。这是**加载期**硬校验，编译期不查 | 编译弹窗 `Invalid property in object '<anonymous> (TMissileCarriageSubDepictionGenerator)': Property 'ReferenceMesh' must be defined`，指向 `Depiction.ndfbin`；语法全绿照样拦（LOSAT 2026-11-11 实测） |
 
 ### 终局：不登记就不画
 

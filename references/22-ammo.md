@@ -4,8 +4,8 @@
 
 | 内容 | 文件 |
 |---|---|
-| 枪械 / 坦克炮 / 火炮 / 炸弹 | `Gfx/Ammunition.ndf` |
-| **导弹（含 ATGM / AAM / SAM）** | `Gfx/AmmunitionMissiles.ndf` + `Gfx/MissileDescriptors.ndf` 的飞行实体（见 `26-ground-missile-tel.md §2`） |
+| 枪械 / 坦克炮 / 火炮 / 炸弹 | `Gfx/Ammunition.ndf` | 简称“普通弹药”
+| **导弹（ ATGM / AAM / SAM / LGB（激光制导炸弹））** | `Gfx/AmmunitionMissiles.ndf` + `Gfx/MissileDescriptors.ndf` 的飞行实体（见 `26-ground-missile-tel.md §2`） | 简称“导弹类弹药”
 | 弹着特效注册 | `Gfx/MimeticImpactMapping.ndf` |
 
 ⚠ **行尾与其余 NDF 不同**：历史上这两个文件是 CRLF，但本项目某次整文件改写后
@@ -42,6 +42,23 @@
 - `AffichageMunitionParSalve` = UI 显示，**自建弹药必须 == ShotsCountPerSalvo**
   （原版 237 条刻意不等，那是多管 AA 的情况，别照抄）
 
+⭐ **同一个弹药箱里，所有弹药的 `ShotsCountPerSalvo` 必须逐条相等**——这是**加载期硬校验**，
+不是软约束：
+
+```
+[Fatal error] Can't load 'Glad:/NDF/GFX/Weapon.ndfbin':
+  Two ammunitions used by weapons on ammo box '0' don't have the
+  same 'ShotCountPerSalvo': '4' and '3'
+```
+
+注意报错里写的是 **`ShotCountPerSalvo`**（少一个 s），按这个名字去 grep 会找不到字段。
+真因永远是"给某个炮位加了一个 `ShotsCountPerSalvo` 与同箱邻居不同的弹"。
+本项目实例：2A36 加红土地（原版 `=3`），同箱 HE 是 `4` → 整份 `Weapon.ndfbin` 拒绝加载。
+
+**做双子弹药 / 加弹种时，先查同箱邻居再抄数**：`Salves` 长度不动、`AmmoBoxIndex` 相同、
+`Name` 逐字符相同、`ShotsCountPerSalvo` **也要相同**。前三条在 §2.5 的"机载加槽四件套"里写了，
+第四条最容易漏——因为它看起来属于"弹药自己的参数"。
+
 ### 术语：双子弹药（Dual Ammunition）
 
 **双子弹药**指**共用同一个弹药箱（同一 `AmmoBoxIndex`）的两个或更多弹药对象**。
@@ -65,9 +82,39 @@
 | 2S1 | `[6,4]` | 箱 0：榴弹 + 烟雾弹 | 6 × 6 = 36 ≈ 实车 35 | 两者同为 `WQEYYEBLDI` |
 | 2S23 | `[4,6,15]` | 箱 0：榴弹 + 烟雾；箱 1：AP；箱 2：机枪 | — | 箱 0 两者同为 `CWBCQJBMHY` |
 
-⚠ **飞机上全库 0 先例**：769 个「同炮塔多武器」的实例**全是地面枪炮**，
-没有一个炮塔里挂两种导弹。做机载双子弹药属于创新用法，必须实机验收
-（首个风险点是 `TourelleN_MissileCount` 是否按武器求和，导致挂载模型翻倍）。
+⚠ **原版全库 0 先例**：769 个「同炮塔多武器」的实例**全是地面枪炮**，
+原版没有一个炮塔里挂两种导弹。
+
+⭐ **但本项目已实装 3 例机载双子弹药并编译通过**（2026-11-08 复核；柳叶刀 / Mig29M
+是本轮之前就有的先例，AH64 ATAS 地狱火为本轮新增），
+所以「0 先例」只描述**原版**，不能当「本项目不能做」的结论：
+
+| 实例 | 炮塔 | 两个弹种 | 共箱 | `Name` token |
+|---|---|---|---|---|
+| 柳叶刀 `Descriptor_Unit_Lancet_SOV` | 单机 | `Ammo_Lancet_AP_SOV` / `_HE_SOV` | box0 | 同为 `LNCTHEAD` |
+| `WeaponDescriptor_MiG_29M_SOV` | tourelle2（槽 2 + 槽 4） | `Ammo_AGM_Kh29T_HE` / 原版 `Ammo_AGM_Kh29T` | box1 | 同为 `ISDQZQPFVK` |
+| `WeaponDescriptor_AH64_Apache_ATAS_US` | tourelle3（槽 3 + 槽 5） | 原版 `Ammo_AGM_AGM114A_x8` / `_HE` | box1 | 同为 `PMPTRGMCKS` |
+
+**机载加槽四件套**（从 `.bak_kh29slot` 加槽前后 diff 反推，三例同构）：
+
+1. 弹药：克隆新弹，`Name` 与同组第一条**逐字符相同**；共用 `EffectTag`。
+2. 武器管理器：在该炮塔的 `MountedWeaponDescriptorList` 加第二个
+   `TMountedWeaponDescriptor`，`AmmoBoxIndex` 与第一条相同，`Salves` **不动**；
+   新号 `N` 用 `WeaponAlternative_N` / `WeaponActiveAndCanShoot_N` /
+   `WeaponIgnored_N` / `WeaponShootData_0_N`。
+3. `Depictions/DepictionAerialUnits.ndf`：新增
+   `Op_<Unit>_WeaponN is DepictionOperator_WeaponMissileCarriageFire`
+   （`Connoisseur = MissileCarriage_<Unit>`、`WeaponIndex = <炮塔序号>`、
+   `WeaponShootDataPropertyName = ["WeaponShootData_0_N"]`、
+   `FireEffectTag = "weapon_effet_tagN"`），加进 `Operators` 列表，
+   `Actions` MAP 加 `( "weapon_effet_tagN", <复用同组第一条弹的特效对象> )`。
+4. **不要动** `MissileCarriage.WeaponInfos`：它按 `WeaponIndex`（炮塔序号）登记
+   `MissileCount`，双子弹药共用同一条即可；多登记反而让引擎多画一组挂架
+   （`21-depiction.md §4.3`）。`DepictionAlternatives` / Showroom / Ghosts 也不用动。
+
+⇒ 早先担心的「`TourelleN_MissileCount` 按武器求和导致挂载模型翻倍」**没有发生**：
+    计数来源是 `WeaponInfos` 而不是挂载槽数量。
+    仍须实机验收的是「两个弹种是否真共用同一份弹量」与「面板名字是否跳变」。
 
 ### 每轮时长（改 `Sim` 必算）
 
@@ -201,16 +248,86 @@ P="<python>"; A="<skill>/scripts/sim_sd_audit.py"
 | `MaximumRangeAirplaneGRU` / `MaximumRangeHelicopterGRU` | 能否打空中 | **是否为 0** 是唯一判据 |
 | `WeaponCursorType` | 光标 | `Weapon_Cursor_GroundMissile` / `Weapon_Cursor_FastCanon` / `Weapon_Cursor_CorrectedArtillery` |
 | `IsFireAndForget` | 射后不理 | 位置在 `ShotsBeforeMaxNoise` **之后** |
+| `DistanceToTarget` | 命中率是否随到目标距离变化（嵌在 `HitRollRuleDescriptor = TDiceHitRollRuleDescriptor` 内部，全库唯一的命中掷骰模型） | `True`(1071) 掷骰含距离因子、命中率随射程衰减；缺失/False(77) 命中率与距离无关。自寻的导弹/制导炸弹保持缺失 |
 | `CanShootOnPosition` + `NbSalvosShootOnPosition` | 可直接点地面（**两行相邻**） | N 原版只取 **1~4** |
 | `TraitsToken` | 标签 | F&F 弹一律 `['MOTION','F&F']`；F&F 弹 `PiercingWeapon=False` |
 | `PiercingWeapon` | 是否穿透 | |
-| `ImpactHappening` | 弹着特效键 | 必须已在 `MimeticImpactMapping.ndf` 注册 |
+| `ImpactHappening` | 弹着特效键 | 必须已在 `MimeticImpactMapping.ndf` 注册；**枚举值不许臆造**，见 §3.1 |
 | `TirIndirect` | 间瞄 | 与 `Weapon_Cursor_CorrectedArtillery` 搭配 |
 | `TimeBetweenTwoShots` | 射速间隔 | **下限 0.1，且必须是 0.1 的整数倍**（= gameplay tick）。0.15 / 0.25 / 0.35 这类值**非法**，启动期 Fatal：`TimeBetweenTwoShots (%1) must be multiple of a gameplay tick length (%2s)` |
 | `TimeBetweenTwoSalvos` | 齐射间隔 | 粒度 0.05 |
 | `TimeBetweenTwoFx` | 特效间隔 | **最小 0.05**（全加特林） |
 | `ShotsBeforeMaxNoise` | 连发上限 | |
 | `IsHarmlessForAllies` | 不伤友军 | 火焰/爆炸类常用 |
+
+> **`DistanceToTarget` 实测结论（base.zip 全库只读勘查，未改任何 NDF）**：全库命中掷骰模型只有 `TDiceHitRollRuleDescriptor` 一种；1,148 个掷骰块中 **1,071** 带 `DistanceToTarget = True`（命中率随到目标距离变化，瞄射类弹药），**77** 不带（命中率与距离无关）。后者两类成因：① 射后不理自寻的（AA / AGM / SAM / 制导炸弹——命中由制导决定，制导炸弹借超长制导时间实现）；② 狙击步枪 / 自动榴弹 / 迫击炮等"距离无关精度"模型。
+> **改弹药时**：新建常规瞄射弹药 → 设 `True`（精度随射程衰减）；新建自寻的导弹 → 保持缺失（=False）。该字段在命中掷骰模型内，与 loft 设计器操作的 `TGuidedMissileMovementConfigDescriptor`（运动/弹道）**正交**，互不影响。
+
+### 3.1 ⭐ `ImpactHappening`：只能从表里挑，不许按「几代弹」推
+
+**【原理】** 这个字段是**命中事件名**。运行期引擎拿它去
+`GameData/Generated/Gameplay/Gfx/MimeticImpactMapping.ndf`（`TMimeticWorldDescriptor` 那张 MAP）
+里查表；查不到就当场 Fatal：
+
+```text
+Fatal error
+happening '<你写的名字>' requested and missing in Mimetic World Descriptor
+```
+
+**只在真的打中那一刻才炸** —— 加载、编译、静态检查全绿也发现不了，
+所以「编译 rc=0 + 能进游戏」完全不能证明这个字段对。
+
+**【操作】** 定值前先把白名单抓出来，再挑同名族的现役条目：
+
+```python
+import re
+src = open(r"C:/.../warno_base/GameData/Generated/Gameplay/Gfx/MimeticImpactMapping.ndf",
+           encoding="utf-8-sig", errors="replace").read()
+legal = set(re.findall(r"\(\s*'([^']+)'\s*,", src))   # 156 条
+```
+
+实测分族（**别跨族借**）：
+
+| 族 | 合法取值 |
+|---|---|
+| 地面反坦克（地发导弹） | `MissileATGMGen1` / `MissileATGMGen2` / `MissileATGMGen3` —— **无 Gen4 / Gen5** |
+| 空对地 | `MissileAGMGen1` / `Gen2` / `Gen2TopHEAT` / `Gen3` / **`Gen4`** / `MissileAGMGros` |
+| 对空 | `MIssileAASPARROW` / `MIssileAASIDEWINDER` / `MIssileAAAMRAAM`（注意原版就是三连大写 I 的拼写）/ `MIssileAA9K38Igla` / … |
+| 炸弹 | `MissileBombeGBU250Kg` / `500Kg` / `1000Kg` / `1500Kg` |
+
+> LOSAT（2026-11-11）踩过：源 AIM120 的 `'MIssileAAAMRAAM'` 被我改成按「四代反坦克」推的
+> `'MissileATGMGen4'` —— 该名字不存在，弹飞到目标上空才 Fatal。
+> 定稿改 `'MissileATGMGen3'`（现役最高一代地发 ATGM）。
+
+**【验收】** 写盘后扫一遍本 Mod 全部 `ImpactHappening`，逐个比对白名单：
+
+```python
+bad = {v for p in Path(MOD, "GameData").rglob("*.ndf")
+       for v in re.findall(r"ImpactHappening\s*=\s*'([^']+)'",
+                           p.read_text(encoding="utf-8", errors="replace"))
+       if v not in legal}
+assert not bad, bad
+```
+
+⚠ 别用 `grep "Missile..."` 抓白名单 —— 表里还有大量 `Canon*` / `Roquette*` / `Bombe*` / `Mortier*` / `DestructionUnite*` 条目，
+只按 `Missile` 前缀过滤会把合法值误判成非法（本项目就走了一次这个弯路）。
+
+### 建「导弹类 / 制导炮弹」：起点在 `AmmunitionMissiles.ndf`
+
+**不要**拿 `Ammunition.ndf` 的榴弹去改 `ProjectileType` —— 两类弹药带的是两套字段集：
+榴弹类有 `PitchForParabolic` / `CorrectedShotDispersionMultiplier`，导弹类有
+`MaxAccelerationGRU` / `MissileTimeBetweenCorrections` / `MissileDescriptor`。
+
+正确做法（红土地 Krasnopol 实测）：以导弹文件里现成的导弹类弹药为起点
+（弹药层可用 `Ammo_SSM_MGM52_Lance`，它带全导弹类字段且 `TirIndirect=True`），
+**只从榴弹借用共用参数**：伤害 / 物理 AOE / 压制 / 散布 / 弹着特效 / `FxPower` /
+射击节奏 / `SupplyCost` / `HitRollRuleDescriptor` / 攻顶与命中位置判定 / 口径本地化 token。
+对象也放在 `AmmunitionMissiles.ndf`（导弹类弹药的家）。
+
+面板归类由 `WeaponCursorType` + `MinMaxCategory` 决定，**与投射类型无关**：
+制导炮弹照样写 `Weapon_Cursor_CorrectedArtillery` + `MinMax_obusier`。
+半主动制导（激光）一律**不写** `IsFireAndForget`（`Ammo_AGM_Kh29L` / `Ammo_Bomb_GBU_12_x1` 全 0 例）。
+语义与字段集对照见 `60-numbers.md §1`。
 
 ### 直射三件套（间瞄改直射时）
 
@@ -275,6 +392,9 @@ P="<python>"; Q="<skill>/scripts/ndfq.py"
 规则：
 - 格式 **10 位大写字母**，字母表 `A-Z` 去掉 `I` / `O`（base32 变体）
 - > 10 字符 → `Value is too long for a TLocalisationToken`（CSV 里的引号**不算**字符）
+- **硬约束只有「≤10 字符」**；字符集不限于字母。可读的自造名实测可用：
+  `OBJ685GUN`（9 位，含数字，2026-11 编译通过并已写进 `UNITS-DEV.dic`，面板显示待实机确认）、
+  `KRSN2A36`、`MGM52CAL`、`9M79TYPE`。可读名比哈希名好维护，**优先用可读名**。
 
 ### 5.1 自造 token **必须**在 `UNITS.csv` 里登记一行（漏了必崩）
 
@@ -340,6 +460,31 @@ for tok, text in [("KRWREMVCJZ", "30mm AP")]:
   **不要重复登记**（token 是字典键，重复行没有意义）
 - 判据仍是「整组照抄」：抄原版双子弹药时，`Name` 一起抄，不要只抄一半
 
+### 5.4 克隆新建弹药对象（原版还要被别的单位用时）
+
+要给本单位换一款「同名不同数」的弹药（如 105mm M68 的 LR 增程版），而原版弹药对象
+还被 M1/M1IP 等 5 处引用 —— **禁止改原版对象**（铁律 8），克隆一对新的：
+
+**【操作】**（2026-11-10 LAV-600 `M68(LR)` 实测定稿，脚本思路 `clone_ammo_*.py`）
+
+1. **整块复制**原版 AP / HE 两个对象到文件尾部（同一弹种对、同一弹药箱结构），
+   对象名加后缀区分（`Ammo_Canon_AP_105mm_M68_LR`）；
+2. `DescriptorId` 换**新生成的 GUID**，写完做全库唯一性自检（新 GUID 0 命中）；
+3. **AP / HE 的 `Name` 改成同一个新 token**（双子弹药硬约定，§5.3）——
+   面板上双弹共用一个槽位名，各建各的会在切弹种时名字跳变；
+4. `UNITS.csv` 登记一行（`M68LR;M68(LR)`，可读名优先，≤10 字符）；
+5. `WeaponDescriptor_<单位>` 里指向新对象；**`EffectTag` 不动**——它引用的是
+   开火特效对象（`FireEffect_...`），与弹药数值无关，跟着换只会多复制一堆特效；
+6. 写回前探测换行（块间分隔是空行 + CRLF，写死 `"\n"` 会留裸 LF）。
+
+**【验收】**：① 全库弹药对象数 +2、括号结构逐块闭合（逐对象数括号深度，970 个零异常）；
+② 全库 GUID 零重复；③ `sim_sd_audit --unit <名>` 全绿；④ 编译后 `.dic` 里能查到新显示名
+（UTF-16LE，**改 CSV 不重编等于没改**）。
+
+> 自查判据：**某 token 在 mod 的 `Generated/` 里只出现 1 次 ≠ 自造 token**——
+> `Generated/` 是原版数据的副本，token 文本可能在本体字典里（2026-11-10 用户纠正：
+> 原版单位的面板名不需要在 UNITS.csv 登记）。只有「本单位新建的 token」才必须登记。
+
 ## 6. 台账
 
 每次克隆新弹药**必做**：写入 `doc/武器弹药台账.csv`（6 列：HD2武器 / 模板弹药自然语言 / 模板内部名 /
@@ -355,7 +500,7 @@ for tok, text in [("KRWREMVCJZ", "30mm AP")]:
 | 目的 | 做法 |
 |---|---|
 | 换掉某槽的弹药 | 改该 `TMountedWeaponDescriptor.Ammunition` |
-| **做双子弹药**（同炮塔第二个弹种，共用弹池） | 在该炮塔里再加一个 `TMountedWeaponDescriptor`，**`AmmoBoxIndex` 与第一条相同**；`Salves` 长度不变（见 §2 术语）。还要配新号的 `WeaponAlternative_N`、`WeaponShootData_0_N`、depiction Operator + `Actions` 映射 |
+| **做双子弹药**（同炮塔第二个弹种，共用弹池） | 在该炮塔里再加一个 `TMountedWeaponDescriptor`，**`AmmoBoxIndex` 与第一条相同**；`Salves` 长度不变（见 §2 术语）。还要配新号的 `WeaponAlternative_N`、`WeaponShootData_0_N`、depiction Operator + `Actions` 映射（机载四件套见 §2 表格，**不要动 `MissileCarriage.WeaponInfos`**） |
 | 同炮塔第二个弹种，但**独立弹池** | 同上，但 `AmmoBoxIndex` 换新值，并在 `Salves` 末尾补一个元素 |
 | 新开一个炮塔槽 | 要同时改 `Salves` / `SalvoIsMainSalvo` 长度、`WeaponAlternative_N`、`WeaponShootData_0_N`、depiction Operator + `Actions`，且**模型要有对应骨骼**（缺骨骼 = 有弹无火） |
 

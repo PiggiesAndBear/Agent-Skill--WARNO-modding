@@ -301,6 +301,34 @@ MinNbrOfTargetsForOpportunisticTargetInGroupAirStrike = 2    // 212 GRU 内至�
 
 ⇒ 这三条是「AI 认不认这个单位」的模板基线。**偏离基线的孤例要先当嫌疑，但不能当结论**（见 `60-numbers.md §1`「共现 ≠ 规则」）。
 
+### 5.6 ★ 地面 AI 判「这是不是侦察单位」的硬阈值（`Gameplay/Skirmish/UnitMatchers.ndf:155`）
+
+```ndf
+IsRecoUnitMatcher is TAllUnitMatchers(
+    Matchers = [
+        TIsMovableUnitMatcher(),
+        TOpticalStrengthUnitMatcher(OpticalStrengthType=EOpticalStrength/Standard
+                                    Operator=ComparisonOperator_MoreOrEqual OpticalValue=3628)
+    ]
+)
+```
+
+- **只看两个条件**：可移动 + `OpticalStrengths[Standard] >= 3628`。**不看** `FactoryType`、
+  `Vehicule_Reco` 标签、`UnitRole`、`IdentifyBaseProbability`。
+  `RecoTagsMatchersList`（:82）唯一成员就是它；`RecoInfanterieOrVehicleTagsMatchersList`（:54）
+  是「步兵+该 matcher」与 `Vehicule_Reco` 标签的并集。
+- 全库 2916 单位基线：`Factory/Recons` 光学 7067(243) / 5300(108) / 8834(33)；
+  `Factory/Art` 1590(239) / 2473(6) / 3180(2)；`Factory/Tanks` 2473 / 3180 / 1590。
+  ⇒ **炮兵的光学强度必须 < 3628**，原版 MLRS 全用 `1590 / 1590 / 353`。
+- ⇒ 从侦察车克隆出炮兵时若忘了改 `TScannerConfigurationDescriptor`，即使工厂 / 标签 / 角色 /
+  订单集全对，AI 仍会把它编进侦察池。本项目 M752_Lance_US / Tochka_9K79 实测踩过
+  （两者曾是 247 个 `Factory/Art` 里仅有的 2 个 5300，2026-11-07 已修）。
+- 配套「祛侦察化」三件套：光学回 1590/1590/353；
+  `TReverseScannerWithIdentificationDescriptor` 回 `0.1 / 15.0`（侦察是 `0.5/6.0` ~ `0.6/5.0`）；
+  `TIAStratModuleDescriptor.GameplayBehavior` 回 `EGameplayBehavior/Nothing`（`Factory/Art` 245/247 如此）。
+- `TIsArtilleryUnitMatcher()`（:104）是另一条通道，**降光学不影响炮兵池归属**；
+  `LongRangeArtilleryUnitMatcher` 另加「武器射程 ≥ 8000」条件。
+
 ---
 
 ## 6. 能做 / 不能做（一句话版）

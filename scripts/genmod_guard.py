@@ -36,6 +36,7 @@
 import ctypes
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -67,11 +68,31 @@ def parse_args(argv):
 MOD_DIR, MOD_NAME, TIMEOUT = parse_args(sys.argv[1:])
 MODS_ROOT = os.path.dirname(MOD_DIR)                       # .../WARNO/Mods
 UTILS = os.path.join(MODS_ROOT, "Utils")                   # .../WARNO/Mods/Utils
-PY = os.path.join(UTILS, "Python", "python.exe")
 SCRIPT = os.path.join(UTILS, "Scripts", "GenerateMod.py")
 TMP = os.path.join(MOD_DIR, ".workbuddy", "tmp")
 LOG = os.path.join(TMP, "genmod_guard.log")
 ERR_FILE = os.path.join(TMP, "genmod_last_error.txt")
+
+
+def find_python():
+    """定位跑 GenerateMod.py 的 Python。
+
+    ★ 2026-11-12 的游戏更新（手册 2.3.3）**不再自带** `Mods/Utils/Python/python.exe`
+      —— 官方改成要求用户自己装 Python（手册为此新增了整章 Prerequisites）。
+      所以这里必须回退到系统 Python；旧路径仍优先，兼容未升级的机器。
+    """
+    cand = [os.path.join(UTILS, "Python", "python.exe")]
+    for exe in ("python3.exe", "python.exe", "python3", "python"):
+        w = shutil.which(exe)
+        if w:
+            cand.append(w)
+    for c in cand:
+        if c and os.path.exists(c):
+            return c
+    return cand[0]
+
+
+PY = find_python()
 
 
 # ---------------------------------------------------------------- 窗口读取
@@ -164,7 +185,9 @@ MSG_HINTS = [
     (r"Property '(\w+)' must be equal to '([^']*)'",
      "该属性由其它字段的取值**强制**决定，不能自由设（如弹道类型决定 PitchForParabolic）"),
     (r"Non-zero corrected shot dispersion multiplier is only relevant to .* type Artillery",
-     "武器类型不符：该偏差系数只对类型 Artillery 的武器有意义；换弹道类型或删掉这个系数"),
+     "起点选错了：`PitchForParabolic` / `CorrectedShotDispersionMultiplier` 是**榴弹类字段**。"
+     "要做导弹类弹药，起点应取 AmmunitionMissiles.ndf 里现成的导弹类弹药，"
+     "只从榴弹借用伤害/AOE/压制等共用参数，别把榴弹改成别种投射类型"),
     (r"Weapon with parabolic trajectory cannot be embedded on planes or helicos",
      "抛物线弹道不能挂在飞机/直升机上。注意：**不是禁间瞄**，禁的是弹道类型 Artillerie；"
      "换 Obus 弹道即可（代价是强制删 CorrectedShotDispersionMultiplier）"),
@@ -319,11 +342,13 @@ def main():
     if "--probe" in sys.argv[1:]:
         return probe()
 
-    for p, label in ((PY, "官方 Python"), (SCRIPT, "GenerateMod.py")):
+    for p, label in ((PY, "Python（官方自带或系统 python3）"), (SCRIPT, "GenerateMod.py")):
         if not os.path.exists(p):
             print("[中止] 找不到 %s：%s" % (label, p))
             print("       确认 --mod 指向 <WARNO>/Mods/<ModName>，且官方 Utils 目录完整。")
+            print("       新版游戏不再自带 Python，请装 Python 3 并确保 python3 在 PATH 里。")
             return 5
+    print("[环境] Python = %s" % PY)
 
     # 开跑前先记：① 已有的对话框 ② 已有的 WARNO 进程（玩家可能正开着游戏）
     before = dialogs()

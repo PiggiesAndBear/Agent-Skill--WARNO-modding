@@ -247,11 +247,12 @@ hint   : NameToken 超长：上限 10 字符，且要同步 Localisation/*/UNITS
 |---|---|---|
 | `Value is too long for a TLocalisationToken: 'X'` | `NameToken` 超 10 字符 | 改短到 ≤10，并同步 `Localisation/*/UNITS.csv` 的键 |
 | `Property 'X' must be equal to 'Y'` | 该属性被别的字段**强制**决定 | 不要硬设，去找决定它的那个字段（如弹道 → `PitchForParabolic`） |
-| `Non-zero corrected shot dispersion multiplier is only relevant to ... type Artillery` | 偏差系数只对 `Artillery` 类武器有意义 | 换武器类型，或删掉该系数 |
-| `Weapon with parabolic trajectory cannot be embedded on planes or helicos` | 抛物线弹道不能挂飞机/直升机 | **不是禁间瞄**，禁的是弹道类型 `Artillerie`；换 `Obus`（代价：强制删 `CorrectedShotDispersionMultiplier`、`PitchForParabolic=0`） |
+| `Weapon with parabolic trajectory cannot be embedded on planes or helicos` | 抛物线弹道不能挂飞机/直升机 | **不是禁间瞄**，禁的是弹道类型 `Artillerie`；换 `Obus` |
 | `tag list incompatible` / `TagSet` | 承运方与被运方标签无交集 | 修 `TagSet`，否则游戏启动即 Fatal error |
 | `No unit name dictionnary found for nationality ''`（原文双 n） | 实体缺 `MotherCountry`（空串），而它已具备「可选单位」身份 | 内联 `TTypeUnitModuleDescriptor(Coalition=..., MotherCountry='SOV')`，见 5.6 |
 | `Invalid property` | 字段名错、或该模块不接受此字段 | 查该模块的真实字段表（多为加载期报错） |
+| `@file:…@(行:列): Invalid character` + `syntax error, unexpected $end` | **新建对象的 `DescriptorId` 写成裸 `{uuid}`**，不是合法 NDF token（LOSAT 2026-11-11 实测） | 必须写 `GUID:{uuid}`。改完**回滚 `.bak_*` 全部备份再重跑幂等补丁**，不要只在成品文件里补前缀 |
+| `Invalid property in object '<anonymous> (TMissileCarriageSubDepictionGenerator)': Property 'ReferenceMesh' must be defined` | 战场版挂架子生成器缺 `ReferenceMesh`（加载期硬校验，编译期不查） | 补 `Pylons = ~/DepictionPylonSet_ATGM` + `ReferenceMesh = $/GFX/DepictionResources/Modele_<单位>`，见 `21-depiction.md §4.3` |
 
 ### 5.5 三条安全纪律（每条都是事故换来的）
 
@@ -420,8 +421,6 @@ grep -c "Satchel_US" GameData/Generated/Gameplay/Gfx/UniteDescriptor.ndf   # 应
 | `No unit name dictionnary found for nationality ''` | 实体缺 `MotherCountry` | 补国籍（**只在启动期报**） |
 | `Unit 'X', Transport '(None)', Exp 0 doesn't match division rule` | 硬建了独立 pack 却当运输用 | 改走组合包 `Transport=<车> Unit=<步兵>` |
 | `Weapon with parabolic trajectory cannot be embedded on planes or helicos` | 飞机/直升机挂抛物线弹道 | 换 `ProjectileType` |
-| `Non-zero corrected shot dispersion multiplier is only relevant to ... Artillery` | 换非 `Artillerie` 弹道后没删字段 | 删 `CorrectedShotDispersionMultiplier` |
-| `Property 'PitchForParabolic' must be equal to '0'` | 同上 | `PitchForParabolic = 0` |
 | `Value is too long for a TLocalisationToken` | token > 10 字符 | 缩到 10（CSV 引号不计） |
 | 时间粒度 Fatal（无明确原文） | `TimeBetweenTwoShots < 0.1` / `TimeBetweenTwoFx < 0.05` | 提到下限 |
 | `XPMultiplier[0] == 0` 相关 Fatal | 首档倍率为 0 | 写 `[1.0,0,0,0]` |

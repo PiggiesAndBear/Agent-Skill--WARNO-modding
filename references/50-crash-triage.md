@@ -103,6 +103,36 @@ dump 只能把范围缩到「某类容器查找」，缩不到「哪个描述符
 本项目实例：`toggle_ammo_target.py --control / --restore` 就是这个「切责任方」开关，
 只改 `MissileDescriptor` 的指向，弹药参数一个不动。
 
+## 5.5 先分清「弹窗 Fatal」与「CTD」
+
+不是所有实机报错都要解 dump。WARNO 有两类，处置完全不同：
+
+| | 弹窗 Fatal | CTD（CrashRpt） |
+|---|---|---|
+| 形态 | `Fatal error` 小窗 + 一句英文 | 进程消失，`%LOCALAPPDATA%\…\CrashRpt` 出 dump |
+| 时机 | 加载期 / 特定游戏事件（首次开火、命中瞬间、切换姿态） | 任意 |
+| 信息量 | **报错原文就是答案**，直接字符串搜 NDF | 只有 RVA，要 §2~§4 那套 |
+| 处置 | 按原文改数据，别碰 dump | 按 §5 做对照组二分 |
+
+近年实测的弹窗 Fatal 都长这个形状（都是**硬校验**，编译期零报错）：
+
+```text
+Invalid property in object '<anonymous> (TMissileCarriageSubDepictionGenerator)':
+    Property 'ReferenceMesh' must be defined            ← 缺字段（21-depiction.md §4.3）
+Can't load 'Glad:/NDF/GFX/Depiction.ndfbin':
+    * Missing subdepiction anchor bone 'driver'         ← FBX 缺骨（20-unit-authoring.md §3.4）
+happening 'MissileATGMGen4' requested and missing in
+    Mimetic World Descriptor                            ← 枚举值不在表里（22-ammo.md §3.1）
+@file:…AmmunitionMissiles.ndf@(15697:41): Invalid character   ← 语法（40-engineering.md §5.4）
+```
+
+**判据**：弹窗里出现 `Missing` / `must be defined` / `requested and missing` 这三个词，
+100% 是「你写了引擎找不到的东西」，属于数据侧硬契约，不要去反汇编。
+
+⚠ **注意报错里被点名的文件常常不是肇事文件**。`driver` 那条报的是 17 个外观算子和
+`Depiction.ndfbin`，真因是「多挂了一条乘员子描绘」；`requested and missing` 报的是
+mimetic 表，真因是弹药里一个枚举字符串。**顺着「谁引用了谁」往回找，不要就地改被点名的对象。**
+
 ## 6. 一条纪律
 
 **崩溃转储的时间戳是分流的唯一依据。** 同一个 mod 目录下可能同时挂着「加载期崩溃」

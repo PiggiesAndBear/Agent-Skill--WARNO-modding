@@ -5,6 +5,15 @@
 
 ---
 
+> ### ⚠️ 制作约定（本文第一条 · 最高优先级）
+> **默认完全新建单位，绝不允许动原版。**
+> - 用户说「制作 / 做 / 新建 / 加一个 XX 单位」「克隆这个改成那个型号」→ **默认语义 = 完全新建一个独立单位**：新描述符对象、新 `UnitId`、新 `NameToken`、新本地化 token。
+> - 除非用户**显式声明**「在原单位基础上修改」「改自 XX」「基于 XX 调整」，否则**绝对不允许修改原版单位的任何字段**。
+> - 克隆法（`clone_unit.py`）产出的是新描述符 + 新 UnitId + 新 token，**本质是新建、不是改源**——不要把"克隆"误当成"改原版"。
+> - 若用户诉求是改原版（如"把 X 的射程调大"），那属于**改数据**流程而非"制作单位"，仍需显式声明 + 只读勘查，不要顺手改。
+
+---
+
 ## 0. 一句话判据
 
 > **「单位存在」「单位可用」「单位看着对」是三件不同的事，各自隔着一组注册。**
@@ -153,6 +162,23 @@ python scripts/set_card_art.py --mod <mod根> --png <图> --name <UnitName> \
 → 拷进 Assets 并补注册行 → 把每个 `--units` 的 `ButtonTexture` 改指新 token；按块切片改写，
 行尾风格（CRLF/LF）随原文件。目标尺寸用 `--size WxH`，默认 `512x288`（16:9）。
 
+#### 图从哪来：两段式（透明底渲染 → 深色渐变合成），不要直接交透明 PNG
+
+直接把 EEVEE 透明底 PNG 交上去，会在卡池里和其它单位的深色底风格不一致（2S25 实测踩过）。
+定稿管线三步，前两步脚本已沉淀进 skill（PT100 / 2S25 / LAV-600 三个单位逐值复用）：
+
+```bash
+# ① 透明底渲染（自动取景：顶点投相机空间算 ortho_scale；--trim-z 剔天线防画幅被撑高）
+blender -b <baked.blend> -P scripts/render_card.py -- --out card_raw.png --trim-z 3.15
+# ② 深色渐变合成（参数与先上线的 OBJECT_685 四角像素逐值相同，风格自证统一）
+python scripts/card_composite.py --raw card_raw.png --out card_final.png
+# ③ 注册 + 单位引用
+python scripts/set_card_art.py --mod <mod根> --png card_final.png --name <名> --faction NATO --units Descriptor_Unit_X
+```
+
+两个取景坑已内置在 render_card.py 里，别再手调：`ortho_scale` 是**水平可见宽度**（按垂直算会切炮口）；
+天线等细高部件会把车体压到 67% 宽（正常 81%），`--trim-z` 只影响取景、渲染仍整模型（天线高出画幅属正常裁切）。
+
 > **比例必须是 16:9，不要出方图。** 兵牌是宽幅控件，方图进去会被压扁或裁掉上下。
 > 512×288 是实测通过的规格（引擎侧 tgv 原样保留 512/288，未强制成正方形）。
 > 分辨率别再往上加——卡面显示尺寸本就不大，2 倍图徒增包体。
@@ -204,6 +230,247 @@ python scripts/set_card_art.py --mod <mod根> --png <图> --name <UnitName> \
 4. **删 `UpgradeFromUnit`** — 克隆源带的话要删（见 §6 星形约束）。
 5. **保留共享资源名** — `Modele_*` / `CoatingName` 不能换（换名 = 指向不存在的 mesh/材质）。
 6. **验收：残留模板名恰好 4 行** — 多于 4 行说明还有没换干净的。
+
+### 克隆后必查：订单表（`Descriptor_OrderAvailability_*`）
+
+**【原理】** 单位能做什么，除了模块，还有一张**独立白名单** `Generated/Gameplay/Gfx/OrderAvailability_Tactic.ndf`
+里的 `Descriptor_OrderAvailability_<名字> is [EOrderType/…]`，被单位块两处引用
+（`TOrderConfigModuleDescriptor.ValidOrders` + `TOrderableModuleDescriptor.UnlockableOrders`）。
+
+手写/改写这张表时最容易**整段抄漏**，而症状是「某个按钮凭空不见」，编译、加载、审计全都不报错：
+
+| 少了这项 | 实机症状 |
+|---|---|
+| `EOrderType/ShootDefensiveSmoke` | **烟幕弹下不了指令**；连「受损自动放烟」也没了（自动烟幕是引擎全局行为，见下） |
+| `EOrderType/Reverse` | 不能倒车 |
+| `EOrderType/ShootOnPositionSmoke` | 自行火炮不能打烟幕弹 |
+| `EOrderType/Load` / `UnloadFromTransport` | 不能装载 / 卸载 |
+
+反方向也会出事：**从运输车克隆成非运输单位时，这三项会原样留下**——实机症状是
+命令面板残留「装载 / 卸下」按钮，按了没反应（LAV-600 从 LAV-25 克隆实测）。
+对照克隆源与目标单位的角色，**多了就删**，删完逐项比对同角色单位
+（如侦察坦克对照 `M1IP_Abrams_US`，只留 `UseCapacite` 一类本单位确有模块支撑的项）。
+
+**【操作】**
+
+1. `ShootDefensiveSmoke` = **车载烟幕发射器**那条（自放烟幕）；`ShootOnPositionSmoke` 是**打烟幕弹**（自行火炮）。
+   坦克照抄同类坦克（如 `T80B_SOV`）那一行，位置也照抄：
+   `… EOrderType/ShootOnPositionWithoutCorrection, EOrderType/ShootDefensiveSmoke, EOrderType/AskForSupply …`
+2. 自动烟幕**没有单位级开关**：`Gameplay/Constantes/GDConstants.ndf` 里
+   `AutoSmokeQuandRatioPvInferieurA = 1.0`（血量比跌破 1.0 即触发）、
+   `TempsEnSecondesEntreDeuxSmokeAutomatiques = 1`。**订单可用是唯一前提** —— 修一处，手动 + 自动一起恢复。
+3. UI 侧按钮落在 `UserInterface/Use/InGame/CubeActionsMenus.ndf` 的**槽位 2**
+   （`ShootOnPositionSmoke` / `ShootDefensiveSmoke` / `ChangeAltitude` 三选一），无订单即该槽位无按钮。
+4. 顺带补 `TUnitUIModuleDescriptor.SpecialtiesList` 的 `'_smoke_launcher'`（面板专长图标；
+   官方 414 个带烟幕弹药的载具里 413 个都有，顺序一般 `… '_amphibie', '_smoke_launcher'`）。
+
+**【验收】** 跑一次全库对照，看本单位是否落在「异常」里：
+
+```text
+带 Ammo_SMOKE_Vehicle_Grenadex8 的单位里，没有 ShootDefensiveSmoke 的是哪些？
+  2026-11 实测：414 个中 404 有；缺的 10 个里 9 个是自行火炮/TEL（它们走 ShootOnPositionSmoke 或干脆没有），
+  剩下 1 个「非火炮却缺」的就是本项目的克隆单位 —— 一眼定位。
+```
+
+> 判据口径：**同一类单位（坦克/步战/侦察车）都有的那一项，你也必须有**。
+> 「原版有 0 先例」只对**新玩法**成立；对「同类车都有的基础订单」不成立。
+
+### 克隆后必查：容器文件的换行风格
+
+**【原理】** Python 的 `open(p, encoding="utf-8")` 默认 `newline=None` =
+**universal newlines**，读进来 `\r\n` 一律变成 `\n`。如果读进来直接
+`open(p, "w", newline="")` 写回，原本 CRLF 的文件会被**整份压成 LF**。
+
+后果不是编译失败（`genmod_guard.py` 照样 `Success`），而是：
+- diff 变成「全文件改写」，事后无法判断到底改了哪几行；
+- 与备份做「只有插入」核对时报红，你会以为是越界，实际是换行被打穿。
+
+**【操作】** 读侧保持 `\n`（所有正则与下标定位都不用改），**写侧统一走 `write_like()`**：
+
+```python
+def write_like(p, txt):
+    eol = "\r\n" if open(p, "rb").read().count(b"\r\n") > 0 else "\n"
+    if eol == "\r\n":
+        txt = txt.replace("\r\n", "\n").replace("\n", "\r\n")
+    with open(p, "w", encoding="utf-8", newline="") as f:
+        f.write(txt)
+```
+
+三个高频踩点，都属于「读完之后再判断风格」型错误：
+
+| 错法 | 为什么永远错 |
+|---|---|
+| `nl = "\r\n" if "\r\n" in txt else "\n"` | `txt` 来自 universal-newlines 读取，**永远不含 `\r\n`** ⇒ 恒取 `\n` |
+| `txt.count("\r\n")` 判断风格 | 同上，恒为 0 |
+| `open(p,"w",newline="").write(txt)` | 直接把 LF 落盘，CRLF 丢失 |
+
+**【验收】** 落盘前后各数一次字节：
+
+```python
+b = open(p, "rb").read()
+crlf = b.count(b"\r\n"); bare = b.count(b"\n") - crlf
+# 期望：CRLF 文件 → bare == 0；LF 文件 → crlf == 0
+```
+
+`clone_unit.py` 在 2026-11 已改为 `write_like()`（此前 `NdfDepictionList` /
+`DivisionRules` / `DeckSerializer` 三处容器写回会把 CRLF 写穿；`UNITS.csv` 追加行
+也因同一个误判恒用 LF）。自检不再犯的做法：**任何 `open(..., "w")` 之前，
+先问一句「这份文件的换行风格我是怎么知道的」**。
+
+### 克隆后必查：`NameToken` 残留（克隆源是哈希串时最隐蔽）
+
+**【原理】** 克隆源的 `NameToken` 经常**不是单位名**，而是一个哈希串
+（实测 `LAV_25_US` → `'RJJGNUEUQO'`）。改名表里没有它（`--src-token` 没传、
+`--ammo-map` 也不含），整份克隆完它原样留在新单位块里 —— 编译全绿、能买能存，
+**面板显示的就是那串哈希**；如果连 CSV 都没登记，点开详情面板直接 Dictionary error。
+
+`clone_unit.py` 2026-11-10 起已内置两道护栏：
+① 自动从源单位块读 `NameToken` 加进改名表（打印 `[自动] 源 NameToken … → …`）；
+② 写盘后按新对象名定位重查一遍，`NameToken ≠ TOKEN` 打 `[FAIL]`。
+
+**【验收】**（手工克隆或老版本脚本跑完都要做）：
+
+```bash
+sed -n "/export Descriptor_Unit_<新名> is/,/^)/p" .../UniteDescriptor.ndf | grep NameToken
+# 期望值 = 你给的新 token，不是源单位的、更不是哈希串
+```
+
+### 克隆后必查：后座算子的「射速档次」（速射炮源克隆成大口径炮）
+
+**【原理】** `Turret_1_HydraulicRecoil` 有两个变体，参数差一个数量级：
+
+| 算子 | MaxRecoil | 给谁用 |
+|---|---|---|
+| `DepictionOperator_Turret_1_HydraulicRecoil` | 75 | 105mm+ 大口径主炮 |
+| `DepictionOperator_Turret_1_HydraulicRecoil_AutoCannon` | 10 | 20–40mm 速射机炮 |
+
+从机炮车（如 LAV-25）克隆成 105mm 坦克时，depiction 里那个 `_AutoCannon` 后座算子会
+一起抄过来：**每发 105mm 只按机炮幅度抖一下，观感完全不对**，编译加载零报错。
+反过来更糟（600 发/分的 30mm 按坦克幅度掀车体，`21-depiction.md` 有全库交叉统计）。
+
+**【操作】** 克隆完对比源/新单位的武器口径档，不同档就换算子对（描绘块 + `DepictionOperators.ndf`
+引用两处）；底盘晃动算子同理按吨位选（`Chassis_MediumTank` / `_HeavyTank` / `_AutoCanon`）。
+
+---
+
+### 克隆后必查：炮塔转向（同轴机枪 / 副炮塔「原地不动」）
+
+**【原理】** `WeaponDescriptor_<单位>` 的 `TurretDescriptorList` 里，每个
+`TTurretTwoAxisDescriptor` 有三组互相独立的字段，**序号相同纯属巧合**：
+
+| 字段 | 属于谁 | 含义 |
+|---|---|---|
+| `Tag = "tourelle4"` | **描绘算子** | 匹配 `DepictionOperator_Turret_4_Aim` 的 `OperatorId` → 决定**视觉通道** |
+| `YulBoneOrdinal = 4` | **武器系统** | 引擎**物理旋转**的骨骼序号 → 转 `tourelle_04` |
+| `MasterTurretYulBoneOrdinal = 1` | 武器系统 | 自转不够时由哪座炮塔（`tourelle_01`）补足 |
+| `AngleRotationMax` | 武器系统 | **该副炮塔自己能覆盖的角度范围** |
+
+转向逻辑：**先自转，超出 `AngleRotationMax` 才请求 master 补足**。因此
+
+- `AngleRotationMax = 1°` → 几乎全靠 master → 炮塔转（全库 374 个从属型机枪炮塔里 **362 例**这么写）
+- `AngleRotationMax = 360°` → 「我自己能覆盖全向」→ **master 一步不动**，
+  而它自己转的是 `YulBoneOrdinal` 指向的那个节点（**12 例，全是 PT76B 系列**）
+
+**坑**：克隆 PT76B 系单位时，这一项是 360°。若你的模型里 `tourelle_0N`
+只是给描绘算子写角度用的**空物体**（没有几何），就会复现「开同轴机枪，整座炮塔纹丝不动，
+只有枪口火光」。编译、加载、审计全都不报错。
+
+**【操作】**
+
+1. 先判断 `YulBoneOrdinal` 指向的节点**有没有几何**：
+   `fbx_anchors.py dump <fbx>` 看该节点是 `[Mesh]` 还是 `[Null]`。
+2. 若是 `[Null]`（或它下面没有任何网格）→ 必须让 master 承担转向：
+   把三个角度改成从属型口径（照抄 `WeaponDescriptor_T80B_SOV` 的同轴机枪块）：
+
+   ```text
+   AngleRotationMax      = 0.017453292519943295    // 1°
+   AngleRotationMaxPitch = 0.13962634015954636     // +8°
+   AngleRotationMinPitch = -0.13962634015954636    // -8°
+   ```
+
+3. **不要为了「让它转」去改 `YulBoneOrdinal = 1`**：那会让两个炮塔实体共享同一根骨骼，
+   且 `Tag` 仍是 `tourelle4`，描绘算子与物理旋转脱节。
+4. **不要拿 `Tag` 的序号当物理节点号**。`Tag` 是视觉通道，`YulBoneOrdinal` 是骨骼。
+5. 层级也要对：官方约定**所有 `tourelle_0N` 都是主炮塔（`tourelle_01`）的子节点**，
+   这样副炮塔的角度才是「相对炮塔」的。挂在 `Chassis` 下等于以车体为基准。
+   （已知反例：本项目 `Object_685.fbx` 的 `tourelle_04` 挂在 `Chassis` 下，
+   因无网格暂无影响，但**不能**往它下面挂机枪网格，否则转向车头时会甩出去。）
+6. **同轴机枪的标准拓扑是 turret4**：`Tag="tourelle4"` + `YulBoneOrdinal=4` +
+   `MasterTurretYulBoneOrdinal=1`，配 `DepictionOperator_Turret_4_TurretRockingRecoil_LightMachineGun`
+   ——官方 M1IP / LAV-25 / 2S25 / T-80 全是这个结构。该算子在**加载期**要求 FBX 里有
+   `tourelle_04` + `axe_canon_04` 两根骨（都是空物体也行），缺一根即 CTD，
+   **编译期零报错**。自建模型别自创 `tir_02` 之类命名，照 turret4 补齐三个名字
+   （`tourelle_04` / `axe_canon_04` / `fx_tourelle4_tir_01`，最后一个挂 `axe_canon_01`
+   = 跟主炮俯仰、不跟后坐）。跨文件锚点差集用 `depiction_anchors_all.py` 查。
+
+**【验收】** 一条联合判据（NDF × FBX 交叉，不依赖单位名）：
+
+```python
+yul   = 炮塔块的 YulBoneOrdinal
+rot   = 炮塔块的 AngleRotationMax（弧度）
+cls   = FBX 里 tourelle_0{yul} 的节点类型          # 'Mesh' 或 'Null'
+assert not (cls != "Mesh" and rot > 2°)            # 空节点绝不允许全向自转
+```
+
+→ 实测反向自检：改前 `tourelle_04=Null self_rotation=360.0°` 报红，改后转绿。
+
+> ⚠ **正则陷阱**：在 NDF 上搜 `YulBoneOrdinal\s*=\s*(\d+)` 会命中
+> `MasterTurretYulBoneOrdinal` 里的同名子串。必须加词边界
+> `(?<![A-Za-z])YulBoneOrdinal`，否则两个字段值相同时看不出错、
+> 值不同时会得出**相反结论**（本项目就因此误判过一次）。
+
+### 克隆后必查：乘员子描绘（封闭车体必须摘掉）
+
+**【原理】** 克隆会把源单位的 `HumanSubDepictions_<源>` 一起搬过来，里面是：
+
+```ndf
+HumanSubDepictions_<新> is
+[
+    SubDepiction_Driver
+    (
+        MeshDescriptorHigh = $/GFX/DepictionResources/MeshDescriptor_Driver_US
+        MeshDescriptorLow  = $/GFX/DepictionResources/MeshDescriptor_Driver_US_LOW
+    ),
+]
+```
+
+这是**驾驶员人体网格**，加载期会去你的 FBX 里找 `driver` 骨。封闭车体（坦克 / 履带 TEL / 步战）
+模型本来就没有乘员几何 → **加载期 Fatal，编译期零报错**：
+
+```text
+Can't load 'Glad:/NDF/GFX/Depiction.ndfbin':
+Failed to load object '17 operators:
+  TCosmeticSelectionStyleOperatorDesc … TCosmeticTacticGhostCo[…]
+': Errors on mesh '[high]' in .../<Unit>.fbx:
+* Missing subdepiction anchor bone 'driver'
+```
+
+⚠ 报错会列出 17 个外观算子、指向 `Depiction.ndfbin`，**真因是「多挂了一条乘员子描绘」**，
+很容易误判成「某个算子缺骨」。
+
+**【判据】** 只问一句：**这车在游戏里能看见人吗？**
+
+| 车型 | 处置 |
+|---|---|
+| 敞篷卡车 / 吉普 / 无顶炮车（原版 `CUCV_*` / `DAF_*`） | **保留**，且必须烘焙时补 `driver` 骨（脚底 Z=0，见 `23-mesh-import.md §5.4`） |
+| 封闭车体（坦克 / 履带 TEL / 步战 / 自行火炮） | **摘掉**。不要为了过校验补一根浮空 `driver` 骨 —— 车里会凭空站一个人 |
+
+**【操作】** 两处，**保留对象名**避免 namespace 错：
+
+| 文件 | 改动 |
+|---|---|
+| `Depictions/DepictionVehicles.ndf` | `SubDepictions = [ ] + HumanSubDepictions_<新>` → `SubDepictions = [ ]` |
+| `Depictions/DepictionHumans.ndf` | 把 `HumanSubDepictions_<新>` 的 `SubDepiction_Driver` 块体 → `HumanSubDepictions_<新> is []` |
+
+Showroom 版 `SubDepictions = HumanSubDepictionsShowroom_<新>` 指向的通常本来就是 `[]`，安全，不用动。
+
+**【验收】** ① 编译 `rc=0`；② `Gen/NDF/GFX/Depiction.ndfbin` **时间戳是本次编译时间**（证明不是增量跳过）；
+③ `scripts/depiction_anchors_all.py --key <BlackHoleKey> --fbx <模型>` **缺失 0 个 / rc=0**；
+④ 全局 grep `HumanSubDepictions.*<新单位>` 只剩空列表定义。
+
+> 本项目先例：PT-100（OBJ685）/ 2S25（SPRUTSD）/ LAV-600 三个**封闭车体**单位都没有
+> `HumanSubDepictions_*` 对象，均实机通过；LOSAT 因为克隆了敞篷的 `CUCV_Hellfire_US` 才带上，
+> 加载期报 `driver` 缺失。
 
 ---
 

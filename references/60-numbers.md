@@ -15,18 +15,32 @@
 | 报错 | 含义 | 处置 |
 |---|---|---|
 | `Weapon with parabolic trajectory cannot be embedded on planes or helicos` | 飞机/直升机拒收**抛物线弹道**（`EProjectileType/Grenade`/`Artillerie`） | 换 `Obus` / `Roquette` / `Bombe` |
-| `Non-zero corrected shot dispersion multiplier is only relevant to weapons using projectiles of type Artillery` | 该字段非 0 时只允许 `Artillerie` 弹道 | 删掉 `CorrectedShotDispersionMultiplier` |
-| `Property 'PitchForParabolic' must be equal to '0', current value is '0.610865'` | 非抛物线弹道必须把仰角归零 | 置 `0.0` |
 | `Value is too long for a TLocalisationToken: 'FPVSATCHELUS'` | token 上限 **10 字符** | 缩到 10 |
 | `"TAirplaneModuleDescriptor" is required when order "AirplanePatrol" is available` | 订单与模块耦合，不能只删一边 | 一起删/一起留 |
 | `NDF parsing error. Retry?`（**模态对话框**） | 语法错 | 会永久挂起，必须用守卫脚本 |
 
-### 换弹道不是改一个字段，是连带两个派生字段
+### 建「导弹类弹药」：换起点，别去改榴弹的弹道类型
 
-```
-ProjectileType = Artillerie  ⇒  PitchForParabolic 可非 0；CorrectedShotDispersionMultiplier 可非 0；但 Helo/Plane 拒收
-ProjectileType = Obus        ⇒  PitchForParabolic 必须 0；上述 multiplier 必须删
-```
+`ProjectileType` 不是一个可自由翻转的字段 —— 两类弹药带的是**两套字段集**：
+
+| | 榴弹类（`Artillerie` / `Obus`） | 导弹类（`GuidedMissile`） |
+|---|---|---|
+| 独有字段 | `PitchForParabolic`、`CorrectedShotDispersionMultiplier` | `MaxAccelerationGRU`、`MissileTimeBetweenCorrections`、`MissileDescriptor` |
+| 落在哪个文件 | `Ammunition.ndf` | `AmmunitionMissiles.ndf` |
+
+所以「做一发制导炮弹 / 任何一种导弹类弹药」的正确起点，是 `AmmunitionMissiles.ndf` 里
+**现成的导弹类弹药**（弹药层可拿 `Ammo_SSM_MGM52_Lance` 当基准，它带全导弹类字段、
+且是 `TirIndirect=True`），然后只从榴弹那边**借用共用参数**：
+
+- 伤害 / 物理 AOE / 压制 / 压制 AOE（`PhysicalDamages`、`RadiusSplash*`、`SuppressDamages`）
+- 散布（`DispersionAtMin/MaxRangeGRU`）、弹着特效（`ImpactHappening`）、`FxPower`
+- 射击节奏（`AimingTime` / `TimeBetweenTwoSalvos` / `ShotsCountPerSalvo`）、`SupplyCost`
+- 命中判定块（`HitRollRuleDescriptor`）、攻顶与命中位置（`ForceHitTopArmorOnSuccess` / `ComputeArmorFromImpactLocation`）
+- 152mm 的本地化 token（`Name` / `TypeCategoryName` / `Caliber` / `WeaponDescriptionToken`）
+
+反过来拿榴弹改弹道类型，会**同时带进非法字段、又缺必填字段**，改一个撞一个 —— 那是起点选错，
+不是「换弹道要改三个字段」的规律。同理，`WeaponCursorType` / `MinMaxCategory` 只决定
+**面板归类**，与投射类型无关：制导炮弹照样写 `Weapon_Cursor_CorrectedArtillery` + `MinMax_obusier`。
 
 ### 共现 ≠ 规则（本库最容易犯的错）
 

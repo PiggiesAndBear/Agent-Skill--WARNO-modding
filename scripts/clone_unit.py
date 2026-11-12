@@ -213,6 +213,24 @@ def eol_of(p):
     return "\r\n" if b.count(b"\r\n") > b.count(b"\n") // 2 else "\n"
 
 
+def write_like(p, txt):
+    """按目标文件**原有**的换行风格落盘。
+
+    read() 走 universal newlines，读进来一律是 \\n。若直接
+    `open(p, "w", newline="").write(txt)`，本来 CRLF 的文件会被**整份改成 LF** ——
+    WARNO 的 ndf 一旦换行被打穿，`genmod_guard.py` 编译仍可能通过，
+    但 diff 会显示整文件被改写，事后没法判断到底动了哪几行。
+
+    所以：读侧保持 \\n（所有正则 / 下标定位都不必改），写侧统一用本函数。
+    eol_of() 读的是磁盘上的**当前**文件；首次写就保住了原风格，后续读取仍然稳定。
+    """
+    eol = eol_of(p)
+    if eol == "\r\n":
+        txt = txt.replace("\r\n", "\n").replace("\n", "\r\n")
+    with open(p, "w", encoding="utf-8", newline="") as f:
+        f.write(txt)
+
+
 def block_at(text, idx):
     """从 idx 所在块往回找声明行，再按括号深度取到收尾。兼容三种声明 + () / []。"""
     starts = [m.start() for m in DECL_RE.finditer(text) if m.start() <= idx]
@@ -355,6 +373,28 @@ def main():
         rel.append((o.strip(), n.strip()))
     if a.src_token:
         rel.append((a.src_token, TOKEN))
+
+    # ⭐ 源 NameToken 自动检测（2026-11-10 LAV-600 踩坑后补）：
+    # 克隆源的 `NameToken` 经常是一个哈希串（如 'RJJGNUEUQO'），与单位名无关。
+    # 只靠 --src-token 手工传会漏；漏换的后果是面板显示克隆源的原始 token 串
+    # （CSV 没登记 → 更糟，Dictionary error）。这里直接从源单位块里读出来加进改名表。
+    src_unit = next((h for h in hits if h["obj"].startswith("Descriptor_Unit_")), None)
+    if src_unit:
+        src_txt = read(src_unit["file"])
+        src_blk = src_txt[src_unit["start"]:src_unit["end"]]
+        m_nt = re.search(r"(?<![A-Za-z])NameToken\s*=\s*'([^']+)'", src_blk)
+        if m_nt:
+            src_tok = m_nt.group(1)
+            if src_tok == TOKEN:
+                print("   [提示] 源 NameToken 与新 token 相同（%s），改名表不再加" % TOKEN)
+            elif any(o == src_tok for o, _ in rel):
+                print("   [提示] 源 NameToken %r 已在改名表（--src-token/--ammo-map）" % src_tok)
+            else:
+                rel.append((src_tok, TOKEN))
+                print("   [自动] 源 NameToken %r → %r（未传 --src-token，从源块读出）" % (src_tok, TOKEN))
+        else:
+            print("   [警告] 源单位块里没找到 NameToken 字段，请人工核对")
+
     if a.src_display:
         rel.append((a.src_display, DISPLAY))
 
@@ -497,7 +537,7 @@ def main():
                     if not a.no_backup:
                         backup_once(ndl_p)
                     newtxt = txt[:insert_at] + line + txt[insert_at:]
-                    open(ndl_p, "w", encoding="utf-8", newline="").write(newtxt)
+                    write_like(ndl_p, newtxt)
                     txt = newtxt
 
     # ---------- 容器 1：师规则 ----------
@@ -536,8 +576,7 @@ def main():
                 if not a.dry:
                     if not a.no_backup:
                         backup_once(rules_p)
-                    open(rules_p, "w", encoding="utf-8", newline="").write(txt[:s] + new_blk + txt[e:])
-
+                    write_like(rules_p, txt[:s] + new_blk + txt[e:])
     # ---------- 容器 2：DeckSerializer UnitId ----------
     deck_p = os.path.join(mod, "GameData/Generated/Gameplay/Decks/DeckSerializer.ndf")
     if os.path.isfile(deck_p):
@@ -570,7 +609,7 @@ def main():
                     if not a.dry:
                         if not a.no_backup:
                             backup_once(deck_p)
-                        open(deck_p, "w", encoding="utf-8", newline="").write(txt[:s] + new_blk + txt[e:])
+                        write_like(deck_p, txt[:s] + new_blk + txt[e:])
 
     # ---------- 容器 3：本地化 CSV ----------
     csv_p = None
@@ -586,7 +625,10 @@ def main():
         if re.search(r"(?m)^%s;" % re.escape(TOKEN), txt):
             print("  [跳过] CSV 已含 token %s" % TOKEN)
         else:
-            nl = "\r\n" if "\r\n" in txt else "\n"
+            # 注意：不能用 `"\r\n" in txt` 判断风格 —— read() 是 universal newlines，
+            # txt 里永远没有 \r\n，这样判断会让 CRLF 的 UNITS.csv 追加出 LF 行
+            # （混合换行不会报错，但会让整表 diff 变成「全文件改写」）。
+            nl = eol_of(csv_p)
             line = "%s;%s%s" % (TOKEN, DISPLAY, nl)
             print("  [追加] CSV %s;%s" % (TOKEN, DISPLAY))
             if not a.dry:
@@ -594,6 +636,50 @@ def main():
                     backup_once(csv_p)
                 with open(csv_p, "ab") as f:
                     f.write(line.encode("utf-8"))
+
+    # ⭐ NameToken 收尾自检（与上面自动检测配套）：新单位块里的 NameToken 必须 == TOKEN。
+    #    残留克隆源 token 的症状是面板显示原始哈希串或 Dictionary error，编译期零报错。
+    #    按新对象名重新定位（不能复用旧偏移——插入新块后同文件偏移已变）。
+    if not a.dry:
+        ud_p = os.path.join(mod, "GameData", "Generated", "Gameplay", "Gfx", "UniteDescriptor.ndf")
+        if os.path.exists(ud_p):
+            txt2 = read(ud_p)
+            m_blk = re.search(r"export Descriptor_Unit_%s is" % re.escape(NEW), txt2)
+            if m_blk:
+                # ⭐ 2026-11-11 LOSAT 踩坑：单位块常 230+ 行 / 9 KB，NameToken 实测在
+                #    块内偏移 8275 字符处；固定 4000 字符窗口会漏掉并误报 "(无字段)"。
+                #    改为按块边界截取：NDF 顶层块的收括号是行首 `)`（嵌套块有缩进）。
+                tail = txt2[m_blk.start():]
+                m_end = re.search(r"(?m)^\)", tail)
+                seg = tail[:m_end.end()] if m_end else tail[:30000]
+                m2 = re.search(r"(?<![A-Za-z])NameToken\s*=\s*'([^']+)'", seg)
+                got = m2.group(1) if m2 else "(无字段)"
+                if got != TOKEN:
+                    print("   [FAIL] 新单位块 NameToken = %r ≠ %r —— 面板会显示原始 token，请手工修正"
+                          % (got, TOKEN))
+                else:
+                    print("   [ok]   NameToken = %s" % TOKEN)
+
+    # ⭐ 乘员子描绘提示（2026-11-11 LOSAT 踩坑）：克隆源自带 HumanSubDepictions_* 时，
+    #    战场版 depiction 会挂 SubDepiction_Driver，加载期要求 FBX 里有 'driver' 骨；
+    #    封闭车体（坦克 / 履带 TEL / 步战）模型没有乘员几何 → Fatal，**编译期零报错**。
+    #    这里只提示，不自动改（敞篷车需要保留，判据是「车里能不能看见人」）。
+    if not a.dry:
+        dh_p = os.path.join(mod, "GameData", "Generated", "Gameplay", "Gfx",
+                            "Depictions", "DepictionHumans.ndf")
+        if os.path.exists(dh_p):
+            dtx = read(dh_p)
+            m_h = re.search(r"HumanSubDepictions_%s\s+is\s*(.{0,1200}?)(?:\n\n|\Z)"
+                            % re.escape(NEW), dtx, re.S)
+            body = m_h.group(1) if m_h else ""
+            if "SubDepiction_Driver" in body or "SubDepiction_Servant" in body:
+                print("   [警告] 源单位带乘员子描绘（HumanSubDepictions_%s）：" % NEW)
+                print("          加载期会要求 FBX 里有 driver / servant 骨，缺失即 Fatal error，编译期零报错。")
+                print("          · 封闭车体（坦克 / 履带 TEL / 步战）→ 摘掉：")
+                print("            DepictionVehicles.ndf: ` ] + HumanSubDepictions_%s` → ` ]`" % NEW)
+                print("            DepictionHumans.ndf : 块体 → `HumanSubDepictions_%s is []`" % NEW)
+                print("          · 敞篷车 → 保留，并在烘焙时补 `driver` 骨（脚底 Z=0）。")
+                print("          改完必须跑 depiction_anchors_all.py 做全链差集（此类校验一次只报一个）。")
 
     print("\n=== 完成 === 克隆 %d 个对象%s" % (written, "（dry，未写入）" if a.dry else ""))
     if not a.dry and not a.no_backup:
