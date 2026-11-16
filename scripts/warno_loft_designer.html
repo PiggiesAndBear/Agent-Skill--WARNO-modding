@@ -98,11 +98,11 @@ footer code{background:var(--panel2);padding:1px 5px;border-radius:3px;color:var
 <body>
 <div class="app">
   <header>
-    <h1>WARNO 高抛弹道设计器 <small>v6.6 · 末段闭环制导 · ω 尺度 k 默认 1.5</small></h1>
+    <h1>WARNO 高抛弹道设计器 <small>v6.7 · 末段闭环制导 · ω 尺度 k 默认 1.0</small></h1>
     <span class="badge live">字段来自 base.zip 实测 · 197 个导弹</span>
     <span class="badge v3">加速度决定形态 · 渐开线段</span>
     <span class="badge infer">实机裁定：两段都变缓 / 巡航超调 / 落点偏远</span>
-    <span class="badge v3">ω 尺度 k = 1.5（默认）</span>
+    <span class="badge v3">ω 尺度 k = 1.0（默认）</span>
     <span class="spacer"></span>
     <label style="font-size:12px;color:var(--mut)">预设&nbsp;
       <select id="preset"></select>
@@ -119,9 +119,10 @@ footer code{background:var(--panel2);padding:1px 5px;border-radius:3px;color:var
     想在工具里看差别：把「速度律」在 <b>按加速度均匀变速</b> 与 <b>段内恒速（v5 旧口径）</b> 之间切换，同一份 NDF 会给出两条不同弹道。<br>
     v6 沿用的结构：<b>拉起弧 → 斜直线 → 改平弧</b>，末端与 <b>CruiseAltitudeGRU</b> 严格相切；<b>α</b> 仍由几何派生，不是可填参数。<br>
     <b>v6.6 · ω 尺度 k 定标为 1.5（2026-11-08）</b>：<code>k</code> 从 1.00 改为 <b>1.5</b>（实际 <code>ω = AutoGyr(rad)·1.5</code>），两个预设的默认值同步。<b>只改默认值、不改任何建模口径</b>：把参数栏「ω 尺度 k」改回 1.00 即可逐位复现 v6.5 及更早的全部数字（<code>R ∝ 1/k</code>，k=1.5 时曲率半径一律缩到 1/1.5）。<br>
+    <b>v6.7 · ω 尺度 k 回退为 1.0（2026-11-13）</b>：把 <code>k</code> 从 1.5 恢复为 <b>1.0</b>（早期基线 / 默认），两个预设与参数栏初值同步回 1.0。<b>只改默认值、不改任何建模口径</b>：把参数栏「ω 尺度 k」临时选回 1.5 仍可逐位复现 v6.6 的放大曲率（<code>R ∝ 1/k</code>）。<br>
     <b>v6.5 · 末段制导修正（2026-11-08 第六轮实机）</b>：实机发现<b>超调时导弹仍在俯冲段角速度允许范围内尽可能调整俯角</b>，并非冻结在某个下压角；<b>只要还有剩余高度，水平投影越过目标再折返回来也是允许的</b>。⇒ 末段改「闭环追踪」：每步朝 <code>atan2(h_t−y, D−x)</code> 转（全象限 —— 越过 D 后目标在后方、俯角 &gt; 90°，导弹折返），落点 = 轨迹穿越目标高度线处（可 &lt; D / ≈ D 回抓命中 / &gt; D 未回抓）；v6.4 的「固定下压角」降为参数栏「末段制导 → fixed」对照口径。<br>
     <b>v6.4 · 三条实机裁定（2026-11-08，其中 ③ 已被 v6.5 推翻）</b>：① 调低 <code>Ascendant.AutoGyr</code> 时<b>拉起弧与改平弧两段都变缓</b> ⇒ 上升段统一用 <code>gAsc</code>（参数栏「转向率归属」切 split 可逐位对照旧分相口径）；② ω 偏低 + H 不足时<b>引擎不会为凑 H 反调 α</b> ⇒ 改「自由超调」工况，α 保持 θ₀、相切高度自由高于巡航线；③ <s>末段下压角按设定 H 预先定死、不随实际高度重算 ⇒ 命中点落在目标之后</s>（<b>v6.5 推翻</b>：实际是闭环修正俯角，可过冲后折返）。<br>
-    ⚠ 仍属推断的是：ω 的绝对时间尺度 k（**当前定标 1.5**，仍是推断值）、GRU↔m 换算、末段/平飞是否也共用同一个 ω。字段名、默认值、四段结构、速度硬约束来自实测。
+    ⚠ 仍属推断的是：ω 的绝对时间尺度 k（**当前定标 1.0**，仍是推断值；v6.6 曾临时定标 1.5，现已回退）、GRU↔m 换算、末段/平飞是否也共用同一个 ω。字段名、默认值、四段结构、速度硬约束来自实测。
     图默认 <b>1:1 等比例</b>（不启用纵向自动放大）；需要放大时可在参数栏最上方手动调倍数并会自动标注。结论以进游戏 A/B 为准。<br>
     <b>v5 · 单位口径（保留）</b>：<span class="new">角度输入一律弧度</span>（NDF 原生单位），
     <code>θ₀</code> / <code>AutoGyr</code> / 手动 α 全部按 rad 填；参数名右侧蓝字仍给「弧度 · 度数」换算，导出片段直接是弧度。
@@ -243,7 +244,7 @@ const GROUPS = [
     {k:"gUnc", n:"失控段 AutoGyr",   f:"UncontrollableConfig.AutoGyr",           min:0.0175,max:1.9199,step:0.001,v:rad(25),u:"rad",ang:true},
     {k:"gAsc", n:"上升段 AutoGyr ★", f:"AscendantPhaseConfig.AutoGyr · 定拉起弧 R₁ 与改平弧 R₂（实机：两段都随它变缓）", min:0.0175,max:1.9199,step:0.001,v:rad(30),u:"rad",ang:true},
     {k:"gTrm", n:"末段 AutoGyr ★",   f:"TerminalPhaseConfig.AutoGyr · 决定 R_trm 与对准点", min:0.0175,max:1.9199,step:0.001,v:rad(30),u:"rad",ang:true},
-    {k:"kOmega",n:"ω 尺度 k",        f:"【待定标】实际 ω = AutoGyr(rad) × k；不写进 NDF。默认 1.5 为当前标定值（改回 1.00 可复现 v6.5 及更早的数字）", min:0.1,max:10,step:0.05,v:1.5,u:"×"}
+    {k:"kOmega",n:"ω 尺度 k",        f:"【待定标】实际 ω = AutoGyr(rad) × k；不写进 NDF。默认 1.0 为早期基线（v6.6 曾临时定标 1.5，现已回退；临时选 1.5 可放大曲率）", min:0.1,max:10,step:0.05,v:1.0,u:"×"}
   ]},
   { title:"加速度 · 决定形态（v6）", open:true, items:[
     {k:"ac", n:"Default MaxAccelerationGRU",    f:"DefaultConfig · 改平弧与平飞段的速度律（直接改形状）", min:10,max:6000,step:1,v:353, u:"m/s²"},
@@ -256,14 +257,14 @@ const GROUPS = [
 const PRESETS = {
   agm_hi: { label:"SRBM", tag:"实测",
     D:40000,H:5000,Dt:8000,h0:0,ht:0,theta0:rad(78),v0:0,speedModel:"accel",vc:2400,va:1200,vt:3600,
-    gDef:0.349,gUnc:0.349,gAsc:0.349,gTrm:0.349,kOmega:1.5,ac:200,aa:150,at:100,zoom:1,flat:false,
+    gDef:0.349,gUnc:0.349,gAsc:0.349,gTrm:0.349,kOmega:1.0,ac:200,aa:150,at:100,zoom:1,flat:false,
     alphaRule:"sym",alphaRad:rad(15),omegaRule:"unified",terminalRule:"closed",
-    info:"用户给出的 TGuidedMissileMovementModuleDescriptor：Default 2400/200、Uncontrollable 1200/400、Ascendant 1200/150、Terminal 3600/100，四段 AutoGyr 全为 0.349 rad = 20°；H=5000 来自 CruiseAltitudeGRU。<b>D=40000、Dt=8000、θ₀=78° 是占位假设</b>（NDF 里 Dt 写的是 5000，见下）。<b>爬升结论（按默认 ω 尺度 k=1.5）</b>：在 α = θ₀ = 78° 时两段转向弧加起来只能爬 1,800 m（就算把 α 拉到 88.5° 上限也只有约 2,224 m），装不下 5000 m ⇒ 工具判定「需要保持段」，α 保持 θ₀、斜直线 L≈3.29 km（ω=0、R=∞），改平弧 R 从 1.90 km <b>单调</b>长到 2.89 km，相切残差 &lt; 1 cm。把「ω 尺度 k」改回 1.00 可复现旧数字：只能爬 2,699 m、L≈2.47 km、改平弧 R 2.42 → 4.70 km。<br><b>关于 Dt=5000</b>：把末段触发距离改成 NDF 的 5000 后，工具会报「末段来不及对准」—— 从 5000 m 高、约 1513 m/s 平飞，要以 20°/s 压到瞄准线，头会先飞过目标。这条与爬升无关，是末段转向能力的独立约束（见告警）。" },
+    info:"用户给出的 TGuidedMissileMovementModuleDescriptor：Default 2400/200、Uncontrollable 1200/400、Ascendant 1200/150、Terminal 3600/100，四段 AutoGyr 全为 0.349 rad = 20°；H=5000 来自 CruiseAltitudeGRU。<b>D=40000、Dt=8000、θ₀=78° 是占位假设</b>（NDF 里 Dt 写的是 5000，见下）。<b>爬升结论（按默认 ω 尺度 k=1.0，早期基线）</b>：在 α = θ₀ = 78° 时两段转向弧加起来只能爬 2,699 m（就算把 α 拉到 88.5° 上限也只有约 3,337 m），装不下 5000 m ⇒ 工具判定「需要保持段」，α 保持 θ₀、斜直线 L≈2.47 km（ω=0、R=∞），改平弧 R 从 2.42 km <b>单调</b>长到 4.70 km，相切残差 &lt; 1 cm。把「ω 尺度 k」临时选回 1.5 即 v6.6 放大曲率：只能爬 1,800 m（88.5° 上限 2,175 m）、L≈3.29 km、改平弧 R 1.90 → 2.89 km。<br><b>关于 Dt=5000</b>：把末段触发距离改成 NDF 的 5000 后，工具会报「末段来不及对准」—— 从 5000 m 高、约 1513 m/s 平飞，要以 20°/s 压到瞄准线，头会先飞过目标。这条与爬升无关，是末段转向能力的独立约束（见告警）。" },
   agm114: { label:"AGM114A", tag:"实测",
     D:2800,H:141,Dt:2000,h0:0,ht:0,theta0:0,v0:0,speedModel:"accel",vc:1060,va:1500,vt:1500,
-    gDef:rad(50),gUnc:rad(25),gAsc:rad(30),gTrm:rad(30),kOmega:1.5,ac:353,aa:530,at:1060,zoom:1,flat:false,
+    gDef:rad(50),gUnc:rad(25),gAsc:rad(30),gTrm:rad(30),kOmega:1.0,ac:353,aa:530,at:1060,zoom:1,flat:false,
     alphaRule:"sym",alphaRad:rad(15),omegaRule:"unified",terminalRule:"closed",
-    info:"原版唯一的高抛实例族（4 个变体参数全同）。<b>v6.4 实机裁定：调低 Ascendant.AutoGyr 时拉起弧与改平弧「两段都变缓」⇒ 上升段统一用 gAsc</b>，改平弧名义 R₂=1350 m（旧 split 口径是 810 m）。<b>以下数字按默认 ω 尺度 k=1.5</b>：自静止、aa=530 时拉起弧末速只有 380 m/s（远未到 va=1500）⇒ R 从 0 长到 484 m，派生 <b>α=32.3°、相切于 x=472 m</b>、平飞 328 m 后进末段，T≈3.39 s，相切速度 633 m/s，入射角 4.1°。把「ω 尺度 k」改回 1.00 即 v6 及更早的基线：α=24.5°、相切 x=629 m、平飞 171 m、相切速度 722 m/s。想逐位复核 v5/v6 旧数字，再把「转向率归属」切到 split：accel 得 α=27.5°/L_asc=520 m，再切「段内恒速」得 α=15.1°/L_asc=1063 m。TirIndirect = False。" },
+    info:"原版唯一的高抛实例族（4 个变体参数全同）。<b>v6.4 实机裁定：调低 Ascendant.AutoGyr 时拉起弧与改平弧「两段都变缓」⇒ 上升段统一用 gAsc</b>，改平弧名义 R₂=2024 m（旧 split 口径是 810 m）。<b>以下数字按默认 ω 尺度 k=1.0（早期基线）</b>：自静止、aa=530 时拉起弧末速只有 380 m/s（远未到 va=1500）⇒ R 从 0 长到 828 m（R₁=v/ω），派生 <b>α=24.5°、相切于 x=629 m</b>、平飞 171 m 后进末段，T≈3.36 s，相切速度 722 m/s，入射角 4.1°。把「ω 尺度 k」临时选回 1.5 即 v6.6 放大曲率：α=32.3°、相切 x=472 m、平飞 328 m、相切速度 633 m/s。想逐位复核 v6.6 数字，再把「转向率归属」切到 split：accel 得 α=27.5°/L_asc=520 m，再切「段内恒速」得 α=15.1°/L_asc=1063 m。TirIndirect = False。" },
   custom: { label:"自定义", tag:"", info:"" }
 };
 
@@ -643,7 +644,7 @@ function buildAscent(S,mode,pch,L,vA,vC,wA,wD,h0,th0,v0){
 function loftModel(S){
   const D=Math.max(1,S.D), H=S.H, h0=S.h0, ht=S.ht;
   const Dt=clamp(S.Dt,0,D), xTerm=D-Dt;
-  const k=Math.max(0.02,S.kOmega||1.5);
+  const k=Math.max(0.02,S.kOmega||1.0);
   const mode=speedModeOf(S);
   const vA=Math.max(1,S.va), vC=Math.max(1,S.vc), vT=Math.max(1,S.vt);
   const wA=Math.max(1e-6,Math.abs(S.gAsc||0)*k);
@@ -1166,7 +1167,7 @@ function renderInfo(M){
       (noPull?"":("0 → "+fmt(M.RascEnd,0)+" → "))+'∞'+
       '（保持段）'+' → '+fmt(M.RdefStart,0)+' → '+fmt(M.RdefEnd,0)+' m</b>：只在两段转向弧里随 v 增大，'+
       '跨过直线段会跳到 ∞ 再跳回来。<b>这不是 bug，是几何硬约束</b>：以 ω = '+
-      fmt(Math.abs(S.gAsc)*(S.kOmega||1.5),3)+' rad/s 从 '+fmt(deg(S.theta0),0)+
+      fmt(Math.abs(S.gAsc)*(S.kOmega||1.0),3)+' rad/s 从 '+fmt(deg(S.theta0),0)+
       '° 连续压到 0°，全程也只能爬 '+fmt(M.diag.maxTurnH,0)+' m。']);
   if(M.diag.pitchOver&&!M.flat&&Math.abs(deg(S.theta0)-M.alphaDeg)>0.5)
     notes.push(['warn','<b>近垂直发射（θ₀ = '+fmt(S.theta0,3)+' rad ≈ '+fmt(deg(S.theta0),0)+'°）</b>：拉起弧要先压转 '+
@@ -1244,14 +1245,14 @@ function ndfText(){
     '        AutoGyr            = '+r(g)+'\n'+
     '    )\n';
   let t='';
-  t+='// 由 WARNO 高抛弹道设计器 v6.6 生成 · 字段结构来自 base.zip 实测（AGM114A）\n';
+  t+='// 由 WARNO 高抛弹道设计器 v6.7 生成 · 字段结构来自 base.zip 实测（AGM114A）\n';
   t+='// v6：MaxAccelerationGRU 不是时间轴装饰 —— 它决定段内速度曲线，进而决定 R=v/ω，\n';
   t+='//     因此直接影响弹道形态。改加速度等于改形状，不要拿它当"只影响时间"的旋钮。\n';
   t+='// v6.4 实机：Ascendant.AutoGyr 同时决定拉起弧与改平弧的转向率（两段都变缓）；\n';
   t+='//     若把它调得过低而 CruiseAltitudeGRU 又偏小，导弹会冲过设定巡航线。\n';
   t+='// v6.5 实机：末段是闭环制导 —— 超调后仍按 Terminal.AutoGyr 尽可能修正俯角，\n';
   t+='//     只要还有剩余高度，水平投影越过目标再折返回来也可（落点可能偏离 D）。\n';
-  t+='// v6.6：ω 尺度 k 定标为 1.5（实际 ω = AutoGyr×1.5）；k 只是工具侧换算，不进 NDF。\n';
+  t+='// v6.7：ω 尺度 k 默认回退为 1.0（早期基线；v6.6 曾临时定标 1.5）；k 只是工具侧换算，不进 NDF。\n';
   t+='// 本块只含官方字段。α、ω 尺度 k、发射初速 v₀、转向率归属口径都不写进 NDF；AutoGyr 为原生弧度值。\n';
   t+='// AutoGyr 弧度→度数对照：Default '+g6(S.gDef)+'（'+dg(S.gDef)+'）· Uncontrollable '+
       g6(S.gUnc)+'（'+dg(S.gUnc)+'）'+
@@ -1330,7 +1331,7 @@ function init(){
   });
   $("btnJson").addEventListener("click",()=>{
     const M=window.__M||{};
-    const data={_tool:"WARNO Loft Trajectory Designer v6.6",_model:"accel-varying-radius-three-phase-climb-unified-omega-free-overshoot-closed-terminal",
+    const data={_tool:"WARNO Loft Trajectory Designer v6.7",_model:"accel-varying-radius-three-phase-climb-unified-omega-free-overshoot-closed-terminal",
       _angleUnit:"rad",_speedModel:S.speedModel,_omegaRule:(S.omegaRule||"unified"),
       _terminalRule:(S.terminalRule||"closed"),
       _preset:currentPreset,_kOmega:S.kOmega,_alphaRule:S.alphaRule,_v0:S.v0,
@@ -1397,7 +1398,7 @@ function applyImportJSON(j){
     S.alphaRad = legacy ? rad(p.alphaDeg) : p.alphaDeg;
   if(legacy) ANGKEYS.forEach(k=>{ if(typeof p[k]==="number"&&isFinite(p[k])) S[k]=rad(p[k]); });
   if(typeof p.flat==="boolean") S.flat=p.flat;
-  if(typeof p.kOmega!=="number") S.kOmega=1.5;
+  if(typeof p.kOmega!=="number") S.kOmega=1.0;
   if(typeof S.theta0!=="number") S.theta0=0;
   if(typeof S.alphaRad!=="number") S.alphaRad=rad(15);
   if(typeof p.alphaRule!=="string") S.alphaRule="dualphase";

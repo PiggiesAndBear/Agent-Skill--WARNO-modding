@@ -9,8 +9,9 @@
   3) 这种时候 **stdout 一个字节都没有**（python 输出块缓冲，进程被 kill 时全丢）
      ⇒ 报错**只存在于弹窗里**。读不到弹窗 = 拿不到任何线索。
 
-本脚本因此做四件事：
-  枚举 #32770 弹窗 → 过滤按钮文字 → 解析出「对象 / 报错句 / 已知成因」→ 落盘。
+本脚本因此做两件事：
+  1) 通过 Mod 目录里的 `GenerateMod.bat` 发起编译（与手动双击完全等价，bat 内部 `py -3 ..\\Utils\\Scripts\\GenerateMod.py WARNO <目录名>`），并读它的 CLI 输出；
+  2) 枚举 #32770 弹窗 → 过滤按钮文字 → 解析出「对象 / 报错句 / 已知成因」→ 落盘。
 
 用法：
     python genmod_guard.py                              # 当前目录当工程根，超时 1800s
@@ -23,14 +24,14 @@
     0  成功（rc=0 且日志含 Mod Generation Success）
     3  被弹窗拦下（报错文本已解析并写入 genmod_last_error.txt）
     4  超时（无弹窗、无完成 —— 通常是死循环逻辑或资源问题，不是语法）
-    5  环境问题（找不到官方 Python / GenerateMod.py，或已挂着上一次的失败弹窗）
+    5  环境问题（找不到 GenerateMod.bat，或系统 PATH 里没有 Python 启动器 `py.exe`，或已挂着上一次的失败弹窗）
     其他 = GenerateMod 的真实返回码
 
 安全性：报错时只杀**弹窗所属的那个 PID**（headless 编译进程），
         超时也只清理本次新起的 WARNO 进程 —— 不会误杀玩家正开着的游戏。
 
 产出：
-    .workbuddy/tmp/genmod_guard.log        编译 stdout 原文（-u 无缓冲，中途被 kill 也有内容）
+    .workbuddy/tmp/genmod_guard.log        编译 stdout 原文（bat→py 块缓冲，攒到结束才落盘；语法错被弹窗截杀时此文件可能为空，线索在弹窗里）
     .workbuddy/tmp/genmod_last_error.txt   最近一次弹窗报错的解析结果（含原文 + 定位 + 已知成因）
 """
 import ctypes
@@ -66,33 +67,18 @@ def parse_args(argv):
 
 
 MOD_DIR, MOD_NAME, TIMEOUT = parse_args(sys.argv[1:])
-MODS_ROOT = os.path.dirname(MOD_DIR)                       # .../WARNO/Mods
-UTILS = os.path.join(MODS_ROOT, "Utils")                   # .../WARNO/Mods/Utils
-SCRIPT = os.path.join(UTILS, "Scripts", "GenerateMod.py")
+BAT = os.path.join(MOD_DIR, "GenerateMod.bat")             # 工程自带的编译入口（手动双击就是这个）
 TMP = os.path.join(MOD_DIR, ".workbuddy", "tmp")
 LOG = os.path.join(TMP, "genmod_guard.log")
 ERR_FILE = os.path.join(TMP, "genmod_last_error.txt")
 
 
-def find_python():
-    """定位跑 GenerateMod.py 的 Python。
-
-    ★ 2026-11-12 的游戏更新（手册 2.3.3）**不再自带** `Mods/Utils/Python/python.exe`
-      —— 官方改成要求用户自己装 Python（手册为此新增了整章 Prerequisites）。
-      所以这里必须回退到系统 Python；旧路径仍优先，兼容未升级的机器。
+def py_launcher_ok():
+    """GenerateMod.bat 内部用 `py -3` 拉起 GenerateMod.py，依赖 Windows 的 Python
+    启动器 `py.exe` 在 PATH 里。手动编译能跑、守卫却点不亮，多半是 PATH 里没 `py`
+    （干净 / CI 环境常见）。提前探一下，给个明确的环境错误码，不要等到超时。
     """
-    cand = [os.path.join(UTILS, "Python", "python.exe")]
-    for exe in ("python3.exe", "python.exe", "python3", "python"):
-        w = shutil.which(exe)
-        if w:
-            cand.append(w)
-    for c in cand:
-        if c and os.path.exists(c):
-            return c
-    return cand[0]
-
-
-PY = find_python()
+    return shutil.which("py") is not None
 
 
 # ---------------------------------------------------------------- 窗口读取
@@ -342,13 +328,17 @@ def main():
     if "--probe" in sys.argv[1:]:
         return probe()
 
-    for p, label in ((PY, "Python（官方自带或系统 python3）"), (SCRIPT, "GenerateMod.py")):
-        if not os.path.exists(p):
-            print("[中止] 找不到 %s：%s" % (label, p))
-            print("       确认 --mod 指向 <WARNO>/Mods/<ModName>，且官方 Utils 目录完整。")
-            print("       新版游戏不再自带 Python，请装 Python 3 并确保 python3 在 PATH 里。")
-            return 5
-    print("[环境] Python = %s" % PY)
+    if not os.path.exists(BAT):
+        print("[中止] 找不到 %s" % BAT)
+        print("       确认 --mod 指向 <WARNO>/Mods/<ModName>，且目录里确有 GenerateMod.bat。")
+        return 5
+    if not py_launcher_ok():
+        print("[中止] 系统 PATH 里找不到 Python 启动器 `py.exe`。")
+        print("       GenerateMod.bat 内部用 `py -3` 调 GenerateMod.py，没它编译起不来。")
+        print("       请安装 Python 并勾选「Add Python to PATH」（或单独装 py launcher）。")
+        return 5
+    print("[环境] 编译入口 = %s" % BAT)
+    print("       （bat 内部：py -3 ..\\Utils\\Scripts\\GenerateMod.py WARNO <目录名>）")
 
     # 开跑前先记：① 已有的对话框 ② 已有的 WARNO 进程（玩家可能正开着游戏）
     before = dialogs()
@@ -366,15 +356,18 @@ def main():
     os.makedirs(TMP, exist_ok=True)
     log = open(LOG, "wb")
     t0 = time.time()
-    # -u：无缓冲。否则进程被 kill 时日志 0 字节，连「卡在哪一步」都看不到
+    # 通过工程自带的 GenerateMod.bat 编译（与手动双击等价：bat 内部 `py -3 ..\Utils\Scripts\GenerateMod.py`）。
+    # cwd 必须是 Mod 目录：bat 靠 `%%~nx*` 取目录名当 Mod 名、靠相对路径 `..\Utils\...` 找脚本。
+    # 注意：这里不再用 `-u` 直启 python，输出经 bat→py 的块缓冲，进度行可能攒到结束才落盘；
+    #       但语法错时线索本来就只在弹窗里（下方 #32770 拦截），CLI 输出主要用来读「成功/失败摘要」，不受影响。
     proc = subprocess.Popen(
-        [PY, "-u", SCRIPT, "WARNO", MOD_NAME],
+        ["cmd", "/C", "call", BAT],
         cwd=MOD_DIR,
         stdin=subprocess.DEVNULL,
         stdout=log,
         stderr=subprocess.STDOUT,
     )
-    print("mod=%s  pid=%d  timeout=%ss" % (MOD_NAME, proc.pid, TIMEOUT), flush=True)
+    print("mod=%s  pid=%d(cmd)  timeout=%ss" % (MOD_NAME, proc.pid, TIMEOUT), flush=True)
 
     result = None
     while True:

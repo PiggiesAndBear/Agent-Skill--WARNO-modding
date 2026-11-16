@@ -223,9 +223,18 @@ def write_like(p, txt):
 
     所以：读侧保持 \\n（所有正则 / 下标定位都不必改），写侧统一用本函数。
     eol_of() 读的是磁盘上的**当前**文件；首次写就保住了原风格，后续读取仍然稳定。
+
+    ⚠ 2026-11-16 补：NDF 的规范行尾其实是**纯 LF**（基准 = `Mods/ModData/base.zip`）。
+    `.ndf` 探测到 CRLF 就不再是"原风格"，而是该文件已被文本模式写入污染过
+    （`\\r\\n` → `\\r\\r\\n` → 每行之间空一行）。这里仍按原样跟随以免破坏既有文件，
+    但会告警——正确处置是先按 `40-engineering.md §2.5` 还原成 LF，再跑本脚本。
+    `.csv` 的 CRLF 属正常，不告警。
     """
     eol = eol_of(p)
     if eol == "\r\n":
+        if p.lower().endswith(".ndf"):
+            print("  [警告] %s 是 CRLF：NDF 规范应为纯 LF，该文件可能已被污染，"
+                  "见 40-engineering.md §2.5" % os.path.basename(p))
         txt = txt.replace("\r\n", "\n").replace("\n", "\r\n")
     with open(p, "w", encoding="utf-8", newline="") as f:
         f.write(txt)

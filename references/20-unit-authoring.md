@@ -277,6 +277,12 @@ python scripts/set_card_art.py --mod <mod根> --png card_final.png --name <名> 
 
 ### 克隆后必查：容器文件的换行风格
 
+> **前提（2026-11-16 起）**：NDF 的规范行尾是**纯 LF**，基准是 `Mods/ModData/base.zip`
+> （4687 个 ndf 无一 CRLF）。所以下面这套「跟随原文件风格」只在文件本身合规时有意义；
+> **一旦探测到 CRLF，说明该文件已被文本模式写入污染过**（`\r\n`→`\r\r\n`→每行之间空一行），
+> 正确处置是先跑 `scripts/normalize_ndf_format.py` 还原成 LF，**不要"跟随"着把新内容也写成 CRLF**。
+> 详见 `40-engineering.md §2`。
+
 **【原理】** Python 的 `open(p, encoding="utf-8")` 默认 `newline=None` =
 **universal newlines**，读进来 `\r\n` 一律变成 `\n`。如果读进来直接
 `open(p, "w", newline="")` 写回，原本 CRLF 的文件会被**整份压成 LF**。
@@ -302,7 +308,7 @@ def write_like(p, txt):
 |---|---|
 | `nl = "\r\n" if "\r\n" in txt else "\n"` | `txt` 来自 universal-newlines 读取，**永远不含 `\r\n`** ⇒ 恒取 `\n` |
 | `txt.count("\r\n")` 判断风格 | 同上，恒为 0 |
-| `open(p,"w",newline="").write(txt)` | 直接把 LF 落盘，CRLF 丢失 |
+| `open(p,"w").write(txt)`（不带 `newline=""`） | 默认换行转换把 `\n` 再翻成 `\r\n`，输入本身含 `\r\n` 时得到 `\r\r\n` → 下次读写变成「每行之间空一行」 |
 
 **【验收】** 落盘前后各数一次字节：
 

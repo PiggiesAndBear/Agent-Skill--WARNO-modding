@@ -8,10 +8,11 @@
 | **导弹（ ATGM / AAM / SAM / LGB（激光制导炸弹））** | `Gfx/AmmunitionMissiles.ndf` + `Gfx/MissileDescriptors.ndf` 的飞行实体（见 `26-ground-missile-tel.md §2`） | 简称“导弹类弹药”
 | 弹着特效注册 | `Gfx/MimeticImpactMapping.ndf` |
 
-⚠ **行尾与其余 NDF 不同**：历史上这两个文件是 CRLF，但本项目某次整文件改写后
-**已变成全 LF**（实测 0 个 CRLF，`WeaponDescriptor.ndf` 仍是全 CRLF）。抓字段的正则
-必须兜住 `\r`：`^\s*%s\s*=\s*([^\r\n]*?)\r?$`。
-写回前用 `scripts/ndfq.py eol <file>` 探一次，**别信这张表，也别假设**。
+⚠ **行尾**：规范是**纯 LF**（基准 = `Mods/ModData/base.zip`，全库 4687 个 ndf 无一 CRLF，
+见 `40-engineering.md §2`）。历史上这两个文件曾被早期脚本整文件改写成 CRLF，2026-11-16 已还原。
+即便如此，抓字段的正则仍建议兜住 `\r`（`^\s*%s\s*=\s*([^\r\n]*?)\r?$`），
+因为复制粘贴来的片段可能带 CRLF。写回前用 `scripts/ndfq.py eol <file>` 探一次，
+**别信任何表，也别假设**；探测到 CRLF 说明文件已被污染，先还原再改。
 
 **`export` 前缀**：`Ammunition.ndf` / `AmmunitionMissiles.ndf` 的对象**不带** `export`；
 `UniteDescriptor` / `WeaponDescriptor` / `Depictions` **带**。

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """补丁脚本骨架 —— 复制本文件改名后改 CONFIG 段即可。
 
-设计要点（每条都踩过坑，见 references/patch-workflow.md）：
-  * 换行按文件探测，写回时还原（否则 71 万行文件全变红）
+设计要点（每条都踩过坑，见 references/40-engineering.md）：
+  * 行尾一律 LF + 紧凑排版，读改写全走二进制（探测到 CRLF 即该文件已被污染，见 40-engineering.md §2）
   * 每个 step 自带幂等判断：重跑全部走「跳过」
   * 每个 step 自带三类守卫：must / must-not / 结构（行数·括号·块数）
   * --dry-run 不写盘，但用内存 CACHE 让下游 step 看到上游结果
@@ -24,7 +24,7 @@ import sys
 ROOT = os.environ.get("MOD_ROOT") or os.path.abspath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 GD = os.path.join(ROOT, "GameData")
-P_UNIT = os.path.join(GD, "Generated/Gameplay/Gfx/UniteDescriptor.ndf")
+P_UNIT = os.path.join(GD, "Generated/Gameplay/TacticalUnits.ndf")   # 11-13 版起并入此文件
 P_BACKUP = os.path.join(ROOT, ".workbuddy", "backup")
 TAG = "demo"                       # 备份标签：写这次改动的语义，不写序号
 
@@ -43,18 +43,35 @@ CACHE = {}
 
 
 def rd(path):
+    """读：内存里恒为 LF。
+
+    NDF 的规范行尾是纯 LF（基准 = Mods/ModData/base.zip，4687 个 ndf 全是 LF）。
+    若这里探测到 CRLF / 裸 CR，说明该文件已被"文本模式写入"污染过，
+    继续往上写只会把污染固化 —— 先按 40-engineering.md §2.5 还原。
+    """
     with open(path, "rb") as f:
-        head = f.read(200000)
-    eol = "\r\n" if head.count(b"\r\n") > head.count(b"\n") / 2 else "\n"
-    with open(path, encoding="utf-8", newline=None) as f:
-        return f.read(), eol
+        raw = f.read()
+    crlf = raw.count(b"\r\n")
+    lone_cr = raw.count(b"\r") - crlf
+    if crlf or lone_cr:
+        print("  [警告] %s 不是纯 LF（crlf=%d loneCR=%d）：该文件已被污染，"
+              "先还原再改，见 40-engineering.md §2.5"
+              % (os.path.basename(path), crlf, lone_cr))
+    t = raw.decode("utf-8")
+    return t[1:] if t.startswith("\ufeff") else t.replace("\r\n", "\n")
 
 
-def wr(path, text, eol):
-    if eol != "\n":
-        text = text.replace("\n", eol)
-    with open(path, "w", encoding="utf-8", newline="") as f:   # newline="" 必须
-        f.write(text)
+def wr(path, text):
+    """写：二进制 + LF。
+
+    ⚠ 绝不用 open(path,"w") / Path.write_text()：Windows 下默认 newline=None
+    会把字符串里的 \\n 再翻成 \\r\\n，输入本来就含 \\r\\n 时得到 \\r\\r\\n，
+    下一次读写就变成「每行之间空一行」，实测把 6 个文件撑大 6 MB。
+    """
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    with open(path, "wb") as f:
+        f.write(text.replace("\r\n", "\n").encode("utf-8"))
 
 
 def backup(path, tag):
@@ -117,7 +134,7 @@ def transform(seg):
 # ---------------------------------------------------------------- steps
 def step_clone():
     print("\n[1/2] %s -> 新块" % os.path.basename(P_UNIT))
-    t, eol = rd(P_UNIT)
+    t = rd(P_UNIT)
     if exists(t, NEW_HEADER):
         ok("已存在，跳过（幂等）")
         CACHE["text"] = t
@@ -137,7 +154,7 @@ def step_clone():
 
     if not DRY:
         backup(P_UNIT, TAG)
-        wr(P_UNIT, out, eol)
+        wr(P_UNIT, out)
     CACHE["text"] = out
     ok("校验通过，%d 行%s" % (new.count("\n"), "（dry-run 未写盘）" if DRY else " 已写入"))
 
@@ -146,7 +163,7 @@ def step_verify():
     print("\n[2/2] 结构复核")
     t = CACHE.get("text")
     if t is None:
-        t, _ = rd(P_UNIT)
+        t = rd(P_UNIT)
     n = len(re.findall(r"(?m)^export \w+ is " + re.escape(KIND), t))
     ok("顶层对象 %d 个，括号净值 %d" % (n, t.count("(") - t.count(")")))
 

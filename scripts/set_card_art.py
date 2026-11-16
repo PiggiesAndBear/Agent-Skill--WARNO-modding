@@ -34,7 +34,6 @@ TEX_REL = 'GameData/Generated/UserInterface/Textures/ButtonTexturesUnites.ndf'
 UNIT_REL = 'GameData/Generated/Gameplay/Gfx/UniteDescriptor.ndf'
 ICON_DIR = 'GameData/Assets/2D/Interface/Common/UnitsIcons'
 
-
 # ------------------------------------------------------------------ 基础工具
 def die(msg):
     raise SystemExit('[ERROR] ' + msg)
@@ -136,9 +135,11 @@ def register_token(mod, name, png_rel, base_from, dry):
         print('  [skip] token 已注册：%s' % token)
         return token
 
-    idx = data.rfind(b'\n    ]')
-    if idx < 0:
-        die('%s 里找不到 MAP 收尾 "\\n    ]"' % TEX_REL)
+    # 不同 writer 版本的 MAP 收尾缩进不同（有的是 "\n    ]"，有的是 "\n]"）
+    cands = [i for i in (data.rfind(b'\n    ]'), data.rfind(b'\n]')) if i >= 0]
+    if not cands:
+        die('%s 里找不到 MAP 收尾（"\\n    ]" / "\\n]"）' % TEX_REL)
+    idx = max(cands)
     line = ('        ("%s", MAP [( ~/ComponentState/Normal, TUIResourceTexture( '
             'FileName = "GameData:/%s"))]),' % (token, png_rel)).encode('utf-8')
     line += eol_of(data)
@@ -169,10 +170,10 @@ def unit_block(data, unit_name):
     return (s, len(data) if n < 0 else n), name
 
 
-def patch_units(mod, token, units, dry):
-    path = os.path.join(mod, UNIT_REL.replace('/', os.sep))
+def patch_units(mod, token, units, dry, units_rel=UNIT_REL):
+    path = os.path.join(mod, units_rel.replace('/', os.sep))
     if not os.path.exists(path):
-        die('缺少 %s' % UNIT_REL)
+        die('缺少 %s' % units_rel)
     data = open(path, 'rb').read()
     eol_before = data.count(b'\r\n')
     changed = 0
@@ -225,6 +226,8 @@ def main():
     ap.add_argument('--size', default='512x288',
                     help='目标尺寸，WxH（默认 512x288，16:9）或单边正方形')
     ap.add_argument('--from', dest='base_from', default=None)
+    ap.add_argument('--units-file', dest='units_rel', default=UNIT_REL,
+                    help='单位描述文件路径（相对 mod 根）。新版 WARNO 用 GameData/Generated/Gameplay/TacticalUnits.ndf')
     ap.add_argument('--dry', action='store_true')
     a = ap.parse_args()
 
@@ -238,7 +241,7 @@ def main():
 
     png_rel = place_png(mod, a.png, a.name, a.faction, size_wh, a.dry)
     token = register_token(mod, a.name, png_rel, a.base_from, a.dry)
-    n = patch_units(mod, token, a.units, a.dry)
+    n = patch_units(mod, token, a.units, a.dry, a.units_rel)
 
     print('\n%s  改 %d 个单位。验收：编译日志里找 UnitsIcons/%s/%s.tgv，再进游戏看卡池。'
           % ('DRY-RUN 结束' if a.dry else 'DONE', n, a.faction, a.name))

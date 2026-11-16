@@ -55,7 +55,7 @@ agent_created: true
 | **点进军械库就崩 / 部署放下那一刻崩** / 机腹多一具吊舱 / 挂架位置有白色异物 | `21-depiction.md §3c`、`§4.3` | — |
 | **烟幕按钮按不出来 / 面板炮名还是克隆源那把** | `20-unit-authoring.md`（§3「克隆后必查：订单表」）+ `22-ammo.md`（§5 显示名 token） | `20-unit-authoring.md` |
 | AI 不用我的单位 / 状态检定 / 技能 / 效果原语 / 血量档位 | `30-behavior.md` | — |
-| 改了没生效 / 编译报错 / 换行编码 / 回滚 | `40-engineering.md` | — |
+| 改了没生效 / 编译报错 / 换行编码 / 回滚 / **新增对象该插哪（尾后追加 vs 锚点插入）** | `40-engineering.md`（尾后追加见 §2.6） | — |
 | **游戏大更新后 Mod 起不来 / 报一堆 `File not found` / 要不要跑 `UpdateMod.bat` / 想迁到新基线** | `28-mod-update.md`（对象级改动包重放，**不要跑 `UpdateMod.bat`**）+ `scripts/modupgrade/` | 先另存旧 `base.zip`（共同祖先） |
 | 游戏崩溃 CTD / dump 分析 / RVA | `50-crash-triage.md` | — |
 | 面板数字对不上 / 打不到直升机 / 飞行高度 / 弹丸可选 | `60-numbers.md` | — |
@@ -74,7 +74,8 @@ agent_created: true
 3. **先勘查后动手；勘查不出来就问人。** 5 问答不上就别写文件。文档 / 全库检索 / RTTI 能回答的自己查；
    **只有用户知道的事实（"你要的是哪个部件""这块是什么"）直接问**，别用十轮渲染比对去反推。见铁律 12。
 4. **编译只走守卫脚本，不看退出码。** `GenerateMod.py` 语法错也返回 0；报错原文只在 `#32770` 模态框里。
-5. **换行 / 编码先探测再写回。** 同一目录 CRLF/LF 可能混用；`UNITS.csv` 常被存成 GBK → 中文乱码；用 `Path.read_text/write_text` 改大 `.ndf` 会整文件重写换行 → 数十万行假 diff。
+5. **NDF 一律 LF + 紧凑排版，只走二进制读写。** 基准是 `Mods/ModData/base.zip` 官方模板（4687 个 `.ndf` **全部纯 LF**、对象与字段之间**零空行**）。用 `open(p,"w")` / `Path.write_text()` 写已含 `\r\n` 的文本会变 `\r\r\n`，再读写就成了「每行之间空一行」，实测把 6 个文件撑大 6 MB。判据：`crlf==0 且 loneCR==0`，且全文件空行数只能是 2~3。见 `40-engineering.md §2`。
+5b. ⭐ **新增对象一律「基线尾后追加」，只有改已有对象内部字段才允许锚点插入。** 顶层块追加到原版最后一行之后（判据：共同前缀长度 == 基线行数），不插进原版对象之间——官方 `UpdateMod` 的 `diff3` 会把相邻改动链式并成大区间，实测尾后追加 conflict=0、中部插入 conflict=1。**但 append 只保文本不保语义**：官方删/改文件名、命名空间搬家、号段推进、官方也往尾部加对象，都救不了，仍须走 `28-mod-update.md` 的对象级重放。判"是不是新增对象"：追加后是否产生新的顶层 `X is T` 声明——给现有师加卡、补 MAP entry 属 patch，不吃这条。见 `40-engineering.md §2.6`。
 6. **文本锚点必须链式递进。**（这里的"锚点"是 `str.replace` 的定位串，与模型空物体锚点是两回事）
    `replace` 找不到定位串会**静默原样返回**；批量建型时每轮定位串更新为刚插入那条，否则全批只成功第一处。
 7. **验收按依赖顺序。** 买得到 → 存得住 → 名字对 → 模型对 → 里面有人 → 打得出 → 有火光。跳步会误判。
@@ -112,7 +113,7 @@ agent_created: true
     导出片段 → 才回写 NDF**。跳过试算直接改，等于拿编译当调试器。
     见 `27-loft-trajectory.md`（含 §7 前置检查 / 顺序表 / 禁止动作）。
     ⚠ 工具的绝对落点**不是**实机落点（末段 ω 归属未实测），只作定性；
-    `ω 尺度 k = 1.5` 是**标定值不是实测值**，别用它去凑实机数字。
+    `ω 尺度 k = 1.0`（默认；v6.6 曾临时定标 1.5）是**标定值不是实测值**，别用它去凑实机数字。
 15. ⭐ **默认新建单位，不改原版。** 改原版单位的描绘资源 / 武器槽 / 单位块属越界——它会把
     所有引用该单位的师一起改掉，且玩家一眼能看出「原版模型变了、面板多了一行」。
     **「注册到某个师」= 只加 `DivisionRules` 里该师的 `TDeckUniteRule`**；
@@ -237,11 +238,11 @@ agent_created: true
 | `25-asset-pipeline.md` | **资产管线**：FBX 导出定稿参数、glTF 四道清洗、PBR 通道接材质、在成品 FBX 上补几何、删不可见面减面、atlas 像素预算、新增小 FBX 的 AssetCooker 门槛 、**§2 附带坑四（抄通道的三个误读：B 通道当金属度 / `pixels` 不是线性值 / 源模型没有 ORM 导致 `_R`/`_M` 整个缺失）+ 贴图偏黑四层排查（含第 0 层：文件到底有没有）与调色专题** |
 | `26-ground-missile-tel.md` | **地面导弹发射车（TEL）**：判据（炮弹 vs 导弹）、9 处注册、弹药与飞行实体、挂架链（**§3 计数口径修正：`WeaponInfos.MissileCount`，且 `MeshDescriptor` 指向的网格仍要有 `as_{槽}_1`**）、**§3.4 多枚弹（12 发）主网格范式 + `ReferenceMesh` 硬校验 + `as_1_N` 落点（军械库那枚弹就画在 `as_1_1`）**、**§4 出管方向 = 需要改角度时才做独立挂架网格**、**§4.5 挂点位置 = 包围盒中点**、**§4.8 角度参数只管瞄准不管动画（俯角别设 0）**、三处显示场景、判读表、**§9 轮式/履带速度与地形系数**、被推翻的判断 、**§3.4.1 挂点父级：固定发射箱挂 `tourelle_N`、可俯仰发射臂挂 `axe_canon_N`（否则弹翘出筒）**、**§3.4.2 挂点纵向位置：弹长≈炮塔长时取炮塔几何中心（引擎对齐弹体中心，留筒口会戳出一半多）**、**§3.4.3 挂点高度：先量模型原点（AIM-120 原点在弹顶 ⇒ 弹心=挂点−R，按「挂点=弹心」算必低一个半径）；管式发射取筒 `ceil_z`；两排镜像各算各的；18 边形筒有 −2 mm 级固有干涉** |
 | `30-behavior.md` | 行为层：AI 决策五池五标签、4 类 Condition、48 技能、42 效果原语、血量档位 |
-| `40-engineering.md` | 工程规范：五条铁律、换行、锚点截断、**全局替换打穿原版（§3.5）**、守卫、编译四通道、**§5.4 弹窗原文对照（含裸 `GUID` / 缺 `ReferenceMesh` 两条）**、**编译范围与「改了没生效」判据（§5.7）**、验收五件套、回滚 + Fatal 对照 |
+| `40-engineering.md` | 工程规范：五条铁律、**§2 行尾与排版（基准 = `base.zip`，全库 4687 个 ndf 纯 LF + 零行间空行；含「文本模式写入 → `\r\r\n` → 每行空一行」事故档案与还原法，**推翻旧版「CRLF/LF 混用」结论**）**、**§2.6 新增对象「基线尾后追加」原则（diff3 链式合并实测 6 场景 + 边界：append 只保文本不保语义 + 新增 vs patch 的判据 + 验收四件套）**、锚点截断、**全局替换打穿原版（§3.5）**、守卫、编译四通道（走 `GenerateMod.bat`）、**§5.4 弹窗原文对照（含裸 `GUID` / 缺 `ReferenceMesh` 两条）**、**编译范围与「改了没生效」判据（§5.7）**、验收五件套、回滚 + Fatal 对照 |
 | `50-crash-triage.md` | 崩溃分诊：CrashRpt 位置、四字段、RVA、指令解码、对照组、**§5.5 弹窗 Fatal 与 CTD 的分流（`Missing`/`must be defined`/`requested and missing` 一律查数据，不解 dump）** |
 | `60-numbers.md` | 数值语义：引擎硬校验、伤害尺度、对空开关、视野隐蔽命中、碰撞层、弹丸 CTD |
 | `70-ui.md` | 游戏 UI：324 个 NDF 的 6 类分法、**五根五层**、BUCK 模板体系、**四条 token 解析链**、生成层 16 文件、`TUnitUIModuleDescriptor` 接口、六条改动路径 |
-| `27-loft-trajectory.md` | ⭐ **高抛/曲射弹道调参**：什么时候必须上设计器、**13 个字段 ↔ 参数栏映射**（哪些是派生量不能填 NDF）、8 步流程（先复现现状再改单变量）、红/黄诊断含义、三条口径开关与 `k=1.5` 是标定值、实机五项对照、**给智能体的前置/顺序/禁止清单**、定稿参数总表 |
+| `27-loft-trajectory.md` | ⭐ **高抛/曲射弹道调参**：什么时候必须上设计器、**13 个字段 ↔ 参数栏映射**（哪些是派生量不能填 NDF）、8 步流程（先复现现状再改单变量）、红/黄诊断含义、三条口径开关与 `k=1.0` 是标定值、实机五项对照、**给智能体的前置/顺序/禁止清单**、定稿参数总表 |
 | `28-mod-update.md` | ⭐ **Mod 更新专题（游戏大版本升级后）**：为什么不能跑 `UpdateMod.bat`（实测静默丢 82/309 个对象、删掉整份单位表）、对象级改动包三件套原理、五步迁移（导出→三件套预检→拼装→编译→实机）、四道验收闸、**定稿号段规则（UnitId 整体平移 / Division ID 重算）**、**新版引擎 5 条新约束**（不再自带 Python / `GfxDescriptorChassis.ndf` 不可改 / 命名空间搬家 / 产物变 `.txn` / 号段被消耗）、**8 条被推翻的判断与错因**、回滚四档 |
 
 ### scripts/
@@ -254,7 +255,8 @@ agent_created: true
 | `genmod_guard.py` | 编译守卫：捕获 `#32770` 弹窗 → 解析「对象 → 文件:行号 → 成因」→ 落盘 |
 | `dump_engine_types.py` | 抽 `WARNO.exe` RTTI 类型表，与 NDF 用量做三档对照 |
 | `analyze_crashdump.py` | 崩溃转储：RVA → `.pdata` 函数区间 → 寄存器/栈帧 → 字符串标注 |
-| `patch_template.py` | 补丁脚本骨架：换行探测、幂等、must/must-not/结构三类守卫、`--dry-run` |
+| `patch_template.py` | 补丁脚本骨架：幂等、must/must-not/结构三类守卫、`--dry-run`；`rd/wr` 已是**二进制 + LF**（探测到 CRLF 会告警，见 `40-engineering.md §2.3`） |
+| `normalize_ndf_format.py` | ⭐ **排版还原**：`--mod <Mod根> [--base <base.zip>] [--dry]`。扫描 `GameData/**/*.ndf`，用「空行数 ≥ 非空行数 × 0.8」判定整文件被"每行空一行"污染，删空行 + 补头部 1~2 空行 + 转 LF，写前断言非空行序列不变，写后报「与 base.zip 共同前缀」行数。实测事故态命中、正常文件（含 `Fx/` 分组空行）零误报 |
 | `clone_unit.py` | ⭐ **克隆单位变体（一条命令 · 幂等 · 可回滚）**：`--src --name [--token --display-name --src-token --division --list-only --dry]`。先扫**引用闭包**（实测比手工枚举多 4 处：挂架链 + Ghost + Showroom，14 vs 10），再逐块克隆、容器插行（`NdfDepictionList` / `DivisionRules` / `DeckSerializer` / `UNITS.csv`），UnitId 自动取 `max+1`。四条护栏：`GameData:` 资源路径**不跟着改名**（否则 `File not found`）、专属资源文件只留本单位块（否则 `Namespace opened twice`）、缩进取**众数**、幂等按对象身份判（`unnamed` 块也能认）。`--undo <manifest>` 按备份覆盖回滚 —— **绝不要自己按块删**，容器文件里一个块可能是整个大列表。**写回按目标文件原换行风格**（`write_like()`，2026-11 修：此前容器写回会把 CRLF 整份压成 LF，编译照样过，但 diff 变成「全文件改写」，事后查不出改了哪几行）。**NameToken 双护栏**（2026-11-10 补，LAV-600 实测克隆源 `NameToken='RJJGNUEUQO'` 残留）：① 自动从源单位块读 `NameToken` 加进改名表（不传 `--src-token` 也换）；② 写盘后按新对象名复查，不等则打 `[FAIL]` —— 残留的症状是面板显示哈希串或 Dictionary error，编译零报错。**复查窗口按块边界截**（2026-11-11 LOSAT 修：原用固定 4000 字符，而单位块可到 9 KB、`NameToken` 实测在偏移 8275，会误报 `(无字段)`；改为从块头截到行首 `)`，嵌套块有缩进不会误截） |
 | `fbx_anchors.py` | **FBX 7.x 直读校验 + .baf 结构表**（不需 Blender）：`dump` 列节点树与类型；`check` 验 `Chassis` 是 Mesh + 锚点名全命中 + 父子层级；**`baf`** 读烘焙产物的节点块偏移表（时长/帧数/节点数/每块是否带轨道）。多文件逐个处理。`rc=1` 即有缺失或 `--expect-nodes/--expect-anim` 不符。**补完约定骨骼后必须用 `baf` 验节点块数有没有涨**——FBX 里有名字 ≠ baf 里有节点块 |
 | `depiction_anchors.py` | **从 NDF 正向枚举锚点名**：给 `--key <BlackHoleKey>` 或 `--object <算子名>`，沿 Operators / SubDepictions / 算子定义递归，收齐 `Anchors` / `*Node` / `*BoneName`；`--out` 直接产出 `fbx_anchors.py --need-file` 能吃的清单。⚠ **只扫单个 NDF 文件**：`Actions` 里 `+ DepictionAction_*` 指向 `DepictionActions.ndf` 的内容它看不到（实测只报 7 个，漏 `fx_eau` → 实机 `Missing anchor bone`）。要完整清单用下一条 |
