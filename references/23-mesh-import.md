@@ -570,6 +570,23 @@ export Modele_SE_X is TResourceMesh
 2. **判据先于做法。** 每个子系统的第一节都是判据（能不能做）；判据不过就别往下做，
    尤其是炮塔（`24-rig-parts.md §3`）与折叠面板（§5 的"背后是实心还是凹兜"）。
 
+**固定翼的挂点：位置在模型阶段冻结，引擎命名在 NDF 阶段冻结**
+
+挂点组号 `AS_{N}_{M}` 的 `{N}` 由**挂载方案**决定（先 eAAM、后 eAGM，组内按声明顺序，
+见 `24-rig-parts.md §7.1`），而方案会反复改。若模型阶段就按某一版方案命名，
+每改一次方案都要重烘整个网格。正确顺序：
+
+| 阶段 | 做什么 | 冻结什么 |
+|---|---|---|
+| 模型 | 把机体上**所有可用挂点**都放锚点；数字编号（左奇右偶、按 X 由机头到机尾递增）；**不预设挂什么弹** | 位置、旋转（挂架倾角）、父子链 |
+| NDF | 按最终挂载方案决定**启用哪几个**、各自归到哪个 `AS_{N}_{M}` | 组名与组号 |
+| 重烘 | 命名一改就要重导 FBX + 重 cook（`mesh.neu3` 的节点名才是引擎认的） | — |
+
+> 摆多少不浪费：引擎按 `MissileCarriage.WeaponInfos` 逐条找组，**没被方案用到的锚点不参与计数**，
+> 多摆几个不会导致"组数不够/组数过多"的报错。反过来，少摆一个就必须改网格重烘。
+>
+> 判据：**能改 NDF 解决的，绝不动网格；一旦动网格，所有 baf/贴图/节点序都要跟着重来。**
+
 
 ---
 
@@ -598,6 +615,7 @@ export Modele_SE_X is TResourceMesh
 | **部署放下单位瞬间 Fatal：`Mesh 'chassis' requires a bbox on bone`** | 有没有多余的同名 `chassis` 空物体 | bbox 由 `Chassis` **网格**提供；空物体没几何 → 取不到 bbox。见 `26-ground-missile-tel.md §3` |
 | 加载 Fatal：`Skeleton mismatch between mesh and animation`（N vs N+k 骨） | 动画是否在**最后一次加骨之后**重烘 | 加/删任何骨骼或空物体都必须重烘 deploy/fold。见 `26-ground-missile-tel.md §4.7` |
 | **导弹水平出管 / 不沿发射架、朝天乱窜** | `MissileCarriage` 指向的网格 | 出管 box 不在挂架网格里；要单独做一份无动画的挂架网格，见 `26-ground-missile-tel.md §4` |
+| **两种弹挂反了 / 挂到别的挂架上，且不报错** | `AS_{N}_{M}` 的组号 | 组号按「**先 eAAM（按 `WeaponInfos` 声明顺序）→ 再 eAGM**」排，不是整体倒序。两侧弹数相同时写错完全静默。见 `24-rig-parts.md §7.1` |
 | 车上有弹、军械库里没有 | Showroom 版 `SubGenerators` | 战场与军械库各自注册，见 `26-ground-missile-tel.md §5` |
 | 模型倒着/侧着 | 朝向轴 | 改第 1 步 −90 ↔ +90 |
 | 尺寸突然变宽 | 解父级没保留世界矩阵 | 用 `matrix_world` |

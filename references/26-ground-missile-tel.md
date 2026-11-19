@@ -20,7 +20,7 @@
 | §1 | 整条链 9 处注册 | 少一处就静默失败，且**不报错** |
 | §2 | 弹药与飞行实体 | 两个速度字段必须相等 |
 | §3 | 挂架链（地面版） | 计数走 `WeaponInfos.MissileCount`；`MeshDescriptor` 指向的网格里**仍要有 `as_{槽}_1`**（§3.4 主网格范式） |
-| §4 | ⭐ **出管方向**（§4.6 兼起竖动画，§4.8 角度参数） | 方向来自**挂架网格**里的 box，不是数值、不是车体网格；只在需要改出管角度时才做独立挂架网格 |
+| §4 | ⭐ **出管方向**（§4.6 兼起竖动画，§4.7.4 两态偏航，§4.8 角度参数） | 方向来自**挂架网格**里的 box，不是数值、不是车体网格；只在需要改出管角度时才做独立挂架网格 |
 | §5 | 三处显示场景 | 战场 / Showroom / 幽灵各自独立注册 |
 | §6 | 验收与判读 | 先看弹在不在，再看出管方向 |
 | §7 | 被推翻的判断 | 别在 `AngleRotationBasePitch` 上再花时间 |
@@ -135,7 +135,7 @@ Ammunition.ProjectileSpeedGRU  ==  MissileDescriptor.DefaultConfig.MaxSpeedGRU
 | | 飞机 / 直升机 | **地面车（本文）** |
 |---|---|---|
 | 挂点骨骼 | `AS_{N}_{M}` / `AA_{N}_{M}` **整套**挂点组 | **不用整套**，但 `MeshDescriptor` 指向的那份网格里**仍必须有 `as_{武器槽}_1`**（如 `as_1_1`），加载期硬校验，见 §4.2 |
-| 计数来源 | 组号 + `WeaponInfos` 顺序（还有倒序坑） | **`WeaponInfos.MissileCount`**；`PhysicalProperty = "Tourelle{WeaponIndex}_MissileCount"` 只是 `SubDepictionGenerator` 的**显示口径**，不是计数 |
+| 计数来源 | 组号 + `WeaponInfos` 顺序（组号规则见 `24-rig-parts.md §7.1`：**先 eAAM 后 eAGM**，不是整体倒序） | **`WeaponInfos.MissileCount`**；`PhysicalProperty = "Tourelle{WeaponIndex}_MissileCount"` 只是 `SubDepictionGenerator` 的**显示口径**，不是计数 |
 | 挂架描述器 | `MissileCarriage_*`（机腹/翼下） | `MissileCarriage_*`（同名，`MeshDescriptor` 指向「承载 `as_1_1` 的那份网格」；**可以是单位主网格**，见 §3.4） |
 
 结构（三条对象 + 一条引用）：
@@ -751,6 +751,47 @@ for name, rest in rest_worlds.items():
 ⚠ **不要用 `me.polygons` 反查经 `bmesh.ops.remove_doubles` 处理过的面**：它会重排面索引，
 之后取到的顶点属于别的零件（本项目炮口坐标从 `11.08` 错算成 `8.72`，直接导致仰角断言失败）。
 面与顶点**一律从同一把 bmesh 取**。
+
+---
+
+### 4.7.4 ⭐ 部署 / 收起两段片段**不是纯互逆**：整体偏航要按状态分别给
+
+【原理】引擎对炮塔骨的接管是**分状态**的（详见 `24-rig-parts.md` §3.4）：静止时每帧把
+`Tourelle_01` 的偏航写成 `AngleRotationBase`，行驶时不接管。因此同一条旋转曲线，
+在两种状态下回放的视觉差 **180°**。
+
+| 片段 | 回放状态 | 引擎给不给 π | 动画里要不要补 π |
+|---|---|---|---|
+| `_fold.fbx`（展开 → 行军） | 行驶 | 不接管（0） | **要**：`Rz(π)·Ry(−θ)` |
+| `_deploy.fbx`（行军 → 展开） | 静止 | 给 π | **不要**：`Ry(−θ)` |
+
+两条写反的典型症状：
+
+- deploy 补了 π → 停机后炮管朝**前**（与车头同向）；
+- fold 没补 π → 收起后炮管平放在**车尾**，而不是车头方向的甲板上。
+
+【操作】烘焙脚本里给两段不同的整体偏航，**别共用同一个 `set_pose`**：
+
+```python
+def set_pose(t, with_pi=False):
+    ...
+    e_arm.rotation_euler = (0, radians(-FOLD_TOU * t), math.pi if with_pi else 0.0)
+
+bake("..._fold.fbx",   reverse=False, with_pi=True)    # 行驶态
+bake("..._deploy.fbx", reverse=True,  with_pi=False)   # 静止态
+```
+
+配 `Idle` = deploy 的**独立副本**、`MoveFront/Back` = fold 的独立副本：两个槽指同一文件时
+引擎共用播放游标，deploy 一进去就停在末帧。
+
+【验收】两态各量一次，**必须分别用对应状态**（详见 `24-rig-parts.md` §3.4 的补 π 手法）：
+
+```
+deploy + 引擎π ：帧0 平放在甲板（炮架 Z 0.26） → 帧末 炮管朝车尾 54.38°、落地（Z −0.00）
+fold   不加 π   ：帧0 朝车尾 54.38°、落地        → 帧末 平放朝车头、甲板（Z 0.26）
+```
+
+只验其中一个状态，会得出「改了反而更错」的结论——本项目为此多花了两轮实机。
 
 ---
 
